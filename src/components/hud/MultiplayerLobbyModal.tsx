@@ -1,10 +1,14 @@
 import React, { useEffect, useState } from 'react';
 import {
   Bus,
+  Check,
+  Copy,
+  Hash,
   LogIn,
   LogOut,
   MapPin,
   PlusCircle,
+  Radio,
   RefreshCw,
   UserPlus,
   Users,
@@ -35,6 +39,7 @@ export const MultiplayerLobbyModal: React.FC = () => {
   const rooms = useMultiplayerStore((state) => state.rooms);
   const routes = useMultiplayerStore((state) => state.routes);
   const currentRoom = useMultiplayerStore((state) => state.currentRoom);
+  const p2pStatusText = useMultiplayerStore((state) => state.p2pStatusText);
 
   const login = useMultiplayerStore((state) => state.login);
   const register = useMultiplayerStore((state) => state.register);
@@ -54,6 +59,10 @@ export const MultiplayerLobbyModal: React.FC = () => {
   const [avatar, setAvatar] = useState(AVATAR_CHOICES[0]);
   const [shirtColor, setShirtColor] = useState(COLOR_CHOICES[0]);
 
+  const [directRoomCode, setDirectRoomCode] = useState('');
+  const [copiedCode, setCopiedCode] = useState<string | null>(null);
+
+  const [newRoomCode, setNewRoomCode] = useState('');
   const [newRoomName, setNewRoomName] = useState('');
   const [selectedRouteId, setSelectedRouteId] = useState(
     routes[0]?.id ?? 'route-ql1a-mientay'
@@ -86,17 +95,32 @@ export const MultiplayerLobbyModal: React.FC = () => {
     await login({ username: demoUsername, password: '123456' });
   };
 
+  const handleDirectCodeJoin = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!directRoomCode.trim()) return;
+    joinRoom(directRoomCode.trim().toUpperCase());
+    setDirectRoomCode('');
+  };
+
   const handleCreateRoom = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newRoomName.trim()) return;
     const ok = await createAndJoinRoom({
+      roomCode: newRoomCode.trim() || undefined,
       name: newRoomName.trim(),
       routeId: selectedRouteId,
       maxPlayers: 28,
     });
     if (ok) {
+      setNewRoomCode('');
       setNewRoomName('');
     }
+  };
+
+  const handleCopyCode = (code: string) => {
+    navigator.clipboard?.writeText(code);
+    setCopiedCode(code);
+    window.setTimeout(() => setCopiedCode(null), 1800);
   };
 
   return (
@@ -109,11 +133,16 @@ export const MultiplayerLobbyModal: React.FC = () => {
               <Bus className="w-5 h-5" />
             </div>
             <div>
-              <h2 className="text-base font-bold text-white">
-                Bến Xe Trực Tuyến — Virtual Bus Multiplayer (Phase 3)
-              </h2>
+              <div className="flex items-center gap-2">
+                <h2 className="text-base font-bold text-white">
+                  Bến Xe P2P WebRTC — Virtual Bus Multiplayer
+                </h2>
+                <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/40">
+                  100% P2P • No Backend
+                </span>
+              </div>
               <p className="text-xs text-slate-400">
-                Đăng nhập JWT, chọn chuyến xe khách và tham gia hành trình cùng nhiều người chơi
+                Kết nối trực tiếp Peer-to-Peer (PeerJS WebRTC + Đa Tab) qua Mã Chuyến Xe mà không cần chạy Server
               </p>
             </div>
           </div>
@@ -128,7 +157,7 @@ export const MultiplayerLobbyModal: React.FC = () => {
         </div>
 
         {/* Body Content */}
-        <div className="p-6 max-h-[80vh] overflow-y-auto">
+        <div className="p-6 max-h-[82vh] overflow-y-auto">
           {!user ? (
             /* ==================== AUTHENTICATION VIEW ==================== */
             <div className="space-y-5">
@@ -144,7 +173,7 @@ export const MultiplayerLobbyModal: React.FC = () => {
                   }`}
                 >
                   <LogIn className="w-3.5 h-3.5" />
-                  <span>Đăng nhập</span>
+                  <span>Đăng nhập nhanh</span>
                 </button>
                 <button
                   type="button"
@@ -156,7 +185,7 @@ export const MultiplayerLobbyModal: React.FC = () => {
                   }`}
                 >
                   <UserPlus className="w-3.5 h-3.5" />
-                  <span>Đăng ký tài khoản</span>
+                  <span>Tạo hồ sơ nhân vật</span>
                 </button>
               </div>
 
@@ -177,13 +206,13 @@ export const MultiplayerLobbyModal: React.FC = () => {
                       required
                       value={username}
                       onChange={(e) => setUsername(e.target.value)}
-                      placeholder="VD: hanhkhach01"
+                      placeholder="VD: minh_cantho"
                       className="w-full px-3.5 py-2 rounded-xl bg-slate-950 border border-slate-700 text-sm text-white focus:outline-none focus:border-amber-500"
                     />
                   </div>
                   <div>
                     <label className="block text-xs font-medium text-slate-300 mb-1">
-                      Mật khẩu (Password)
+                      Mật khẩu (Lưu trình duyệt)
                     </label>
                     <input
                       type="password"
@@ -264,15 +293,15 @@ export const MultiplayerLobbyModal: React.FC = () => {
                   className="w-full py-2.5 rounded-xl bg-gradient-to-r from-red-600 to-amber-500 hover:from-red-500 hover:to-amber-400 text-white font-bold text-sm shadow-lg transition-all"
                 >
                   {authMode === 'login'
-                    ? 'Đăng nhập vào Bến Xe'
-                    : 'Tạo tài khoản & Vào Bến Xe'}
+                    ? 'Vào Bến Xe P2P'
+                    : 'Tạo Hồ Sơ & Vào Bến Xe P2P'}
                 </button>
               </form>
 
-              {/* Quick Demo Accounts for Multi-Tab Testing */}
+              {/* Quick Demo Accounts for Instant Multi-Tab / Multi-Device P2P Testing */}
               <div className="pt-4 border-t border-slate-800">
                 <p className="text-xs font-semibold text-slate-400 mb-2.5">
-                  Đăng nhập nhanh tài khoản mẫu (Dùng để test nhiều tab trình duyệt):
+                  Chọn nhanh nhân vật mẫu (Hỗ trợ mở nhiều tab hoặc nhiều máy khác nhau):
                 </p>
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
                   <button
@@ -281,10 +310,10 @@ export const MultiplayerLobbyModal: React.FC = () => {
                     className="p-2.5 rounded-xl bg-slate-950 hover:bg-slate-800 border border-slate-800 text-left transition-all"
                   >
                     <p className="text-xs font-bold text-sky-400">
-                      👨‍✈️ Bác Tài (Driver)
+                      👨‍✈️ Bác Tài Minh
                     </p>
                     <p className="text-[11px] text-slate-400">
-                      User: taixe / Pass: 123456
+                      Vai trò mặc định: Tài xế
                     </p>
                   </button>
                   <button
@@ -293,10 +322,10 @@ export const MultiplayerLobbyModal: React.FC = () => {
                     className="p-2.5 rounded-xl bg-slate-950 hover:bg-slate-800 border border-slate-800 text-left transition-all"
                   >
                     <p className="text-xs font-bold text-emerald-400">
-                      🧢 Phụ Xe (Assistant)
+                      🧢 Phụ Xe Tùng
                     </p>
                     <p className="text-[11px] text-slate-400">
-                      User: phuxe / Pass: 123456
+                      Vai trò mặc định: Phụ xe
                     </p>
                   </button>
                   <button
@@ -305,17 +334,17 @@ export const MultiplayerLobbyModal: React.FC = () => {
                     className="p-2.5 rounded-xl bg-slate-950 hover:bg-slate-800 border border-slate-800 text-left transition-all"
                   >
                     <p className="text-xs font-bold text-amber-400">
-                      🧑‍🚀 Hành Khách
+                      🧑‍🚀 Hành Khách Khoa
                     </p>
                     <p className="text-[11px] text-slate-400">
-                      User: hanhkhach / Pass: 123456
+                      Vai trò mặc định: Hành khách
                     </p>
                   </button>
                 </div>
               </div>
             </div>
           ) : (
-            /* ==================== ROOM LOBBY VIEW ==================== */
+            /* ==================== P2P ROOM LOBBY VIEW ==================== */
             <div className="space-y-5">
               {/* Authenticated User Bar */}
               <div className="flex flex-wrap items-center justify-between gap-3 p-3.5 rounded-2xl bg-slate-950 border border-slate-800">
@@ -324,10 +353,16 @@ export const MultiplayerLobbyModal: React.FC = () => {
                     {user.avatar}
                   </span>
                   <div>
-                    <p className="text-sm font-bold text-white">
-                      {user.displayName}
-                    </p>
-                    <p className="text-xs text-slate-400 flex items-center gap-1.5">
+                    <div className="flex items-center gap-2">
+                      <p className="text-sm font-bold text-white">
+                        {user.displayName}
+                      </p>
+                      <span className="text-[10px] px-2 py-0.5 rounded-full bg-sky-500/15 text-sky-300 border border-sky-500/30 flex items-center gap-1">
+                        <Radio className="w-2.5 h-2.5 animate-pulse" />
+                        <span>{p2pStatusText}</span>
+                      </span>
+                    </div>
+                    <p className="text-xs text-slate-400 flex items-center gap-1.5 mt-0.5">
                       <Wallet className="w-3.5 h-3.5 text-emerald-400" />
                       <span>
                         Ví tiền ảo:{' '}
@@ -354,15 +389,45 @@ export const MultiplayerLobbyModal: React.FC = () => {
                     className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-rose-950/80 hover:bg-rose-900 border border-rose-700/50 text-xs font-semibold text-rose-200"
                   >
                     <LogOut className="w-3.5 h-3.5" />
-                    <span>Đăng xuất</span>
+                    <span>Đổi nhân vật</span>
                   </button>
                 </div>
               </div>
 
+              {/* Direct P2P Room Code Join Bar */}
+              <form
+                onSubmit={handleDirectCodeJoin}
+                className="p-4 rounded-2xl bg-gradient-to-r from-amber-500/10 via-slate-950 to-emerald-500/10 border border-amber-500/40 space-y-2"
+              >
+                <label className="block text-xs font-bold text-amber-300 flex items-center gap-1.5">
+                  <Hash className="w-4 h-4" />
+                  <span>
+                    Nhập Mã Chuyến Xe (Room Code) để kết nối P2P với máy khác:
+                  </span>
+                </label>
+                <div className="flex flex-col sm:flex-row gap-2">
+                  <input
+                    type="text"
+                    value={directRoomCode}
+                    onChange={(e) =>
+                      setDirectRoomCode(e.target.value.toUpperCase())
+                    }
+                    placeholder="Nhập mã phòng (VD: MIENTAY-01, DALAT-02, XE-VIP-88)..."
+                    className="flex-1 px-3.5 py-2 rounded-xl bg-slate-900 border border-slate-700 font-mono text-xs uppercase text-amber-300 placeholder:text-slate-500 focus:outline-none focus:border-amber-400"
+                  />
+                  <button
+                    type="submit"
+                    className="px-4 py-2 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-400 hover:to-teal-400 text-slate-950 font-bold text-xs shadow-md transition-all"
+                  >
+                    Kết nối P2P & Lên xe →
+                  </button>
+                </div>
+              </form>
+
               {/* Active Rooms List */}
               <div>
                 <h3 className="text-xs font-bold uppercase tracking-wider text-slate-400 mb-2.5">
-                  Danh sách phòng xe đang hoạt động ({rooms.length})
+                  Các tuyến xe P2P phổ biến ({rooms.length})
                 </h3>
                 <div className="space-y-2.5">
                   {rooms.map((rm) => {
@@ -373,10 +438,26 @@ export const MultiplayerLobbyModal: React.FC = () => {
                         className="flex flex-wrap items-center justify-between gap-3 p-3.5 rounded-2xl bg-slate-950/90 border border-slate-800 hover:border-slate-700 transition-all"
                       >
                         <div className="space-y-1">
-                          <div className="flex items-center gap-2">
+                          <div className="flex flex-wrap items-center gap-2">
                             <span className="text-sm font-bold text-white">
                               {rm.name}
                             </span>
+
+                            {/* Room Code Pill + Copy Button */}
+                            <button
+                              type="button"
+                              onClick={() => handleCopyCode(rm.roomId)}
+                              title="Copy Mã chuyến xe để gửi cho bạn bè"
+                              className="flex items-center gap-1 px-2 py-0.5 rounded-lg bg-amber-500/15 hover:bg-amber-500/25 border border-amber-500/40 text-amber-300 font-mono text-[11px] font-bold transition-all"
+                            >
+                              <span>Mã: {rm.roomId}</span>
+                              {copiedCode === rm.roomId ? (
+                                <Check className="w-3 h-3 text-emerald-400" />
+                              ) : (
+                                <Copy className="w-3 h-3 opacity-80" />
+                              )}
+                            </button>
+
                             <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-500/15 text-emerald-300 border border-emerald-500/30">
                               {rm.status}
                             </span>
@@ -386,17 +467,21 @@ export const MultiplayerLobbyModal: React.FC = () => {
                             <span>{rm.routeName}</span>
                           </p>
                           <p className="text-[11px] text-slate-400">
-                            Tài xế: <strong className="text-slate-200">{rm.driverName}</strong> • Phụ xe:{' '}
-                            <strong className="text-slate-200">{rm.assistantName}</strong>
+                            Tài xế:{' '}
+                            <strong className="text-slate-200">
+                              {rm.driverName}
+                            </strong>{' '}
+                            • Phụ xe:{' '}
+                            <strong className="text-slate-200">
+                              {rm.assistantName}
+                            </strong>
                           </p>
                         </div>
 
                         <div className="flex items-center gap-3">
                           <div className="flex items-center gap-1 text-xs font-semibold text-amber-300 bg-amber-500/10 border border-amber-500/30 px-2.5 py-1 rounded-xl">
                             <Users className="w-3.5 h-3.5" />
-                            <span>
-                              {rm.currentPlayers}/{rm.maxPlayers}
-                            </span>
+                            <span>Max {rm.maxPlayers}</span>
                           </div>
 
                           <button
@@ -408,7 +493,7 @@ export const MultiplayerLobbyModal: React.FC = () => {
                                 : 'bg-gradient-to-r from-amber-500 to-red-500 hover:from-amber-400 hover:to-red-400 text-slate-950'
                             }`}
                           >
-                            {isCurrent ? 'Đang ở trên xe' : 'Lên xe ngay →'}
+                            {isCurrent ? 'Đang ở trên xe' : 'Lên xe P2P →'}
                           </button>
                         </div>
                       </div>
@@ -417,22 +502,31 @@ export const MultiplayerLobbyModal: React.FC = () => {
                 </div>
               </div>
 
-              {/* Create New Bus Room Form */}
+              {/* Create New P2P Bus Room Form */}
               <form
                 onSubmit={handleCreateRoom}
                 className="p-4 rounded-2xl bg-slate-950/70 border border-slate-800 space-y-3"
               >
                 <h4 className="text-xs font-bold uppercase tracking-wider text-amber-400 flex items-center gap-1.5">
                   <PlusCircle className="w-4 h-4" />
-                  <span>Tạo phòng chuyến xe mới</span>
+                  <span>Tạo phòng chuyến xe P2P mới</span>
                 </h4>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                  <input
+                    type="text"
+                    value={newRoomCode}
+                    onChange={(e) =>
+                      setNewRoomCode(e.target.value.toUpperCase())
+                    }
+                    placeholder="Mã phòng (VD: VIP-888)"
+                    className="px-3 py-2 rounded-xl bg-slate-900 border border-slate-700 font-mono text-xs uppercase text-amber-300 focus:outline-none focus:border-amber-500"
+                  />
                   <input
                     type="text"
                     required
                     value={newRoomName}
                     onChange={(e) => setNewRoomName(e.target.value)}
-                    placeholder="Tên chuyến xe (VD: Xe Đêm Cần Thơ VIP)"
+                    placeholder="Tên chuyến xe (VD: Xe Đêm Cần Thơ)"
                     className="px-3 py-2 rounded-xl bg-slate-900 border border-slate-700 text-xs text-white focus:outline-none focus:border-amber-500"
                   />
                   <select
@@ -451,7 +545,7 @@ export const MultiplayerLobbyModal: React.FC = () => {
                   type="submit"
                   className="px-4 py-2 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-xs transition-all"
                 >
-                  + Tạo phòng & Lên xe làm Chủ phòng / Tài xế
+                  + Tạo phòng P2P & Lên xe làm Chủ phòng / Tài xế
                 </button>
               </form>
             </div>
@@ -461,4 +555,3 @@ export const MultiplayerLobbyModal: React.FC = () => {
     </div>
   );
 };
-

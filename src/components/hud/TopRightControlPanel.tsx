@@ -15,6 +15,7 @@ import {
   useGameStore,
 } from '../../stores/useGameStore';
 import { CAMERA_PRESETS } from '../../game/config/cameraConfig';
+import { useMultiplayerStore } from '../../stores/useMultiplayerStore';
 
 const CAMERA_ORDER: CameraMode[] = ['interior', 'top-down', 'chase'];
 
@@ -29,6 +30,29 @@ export const TopRightControlPanel: React.FC = () => {
   );
   const graphicsQuality = useGameStore((state) => state.graphicsQuality);
   const setGraphicsQuality = useGameStore((state) => state.setGraphicsQuality);
+  const isOnlineMode = useMultiplayerStore((state) => state.isOnlineMode);
+  const currentRoom = useMultiplayerStore((state) => state.currentRoom);
+  const user = useMultiplayerStore((state) => state.user);
+  const emitJourneyControl = useMultiplayerStore(
+    (state) => state.emitJourneyControl
+  );
+  const role = user ? currentRoom?.players[user.id]?.role : undefined;
+  const canChangeEnvironment =
+    !isOnlineMode || role === 'OWNER' || role === 'DRIVER' || role === 'ASSISTANT';
+
+  const handleTimeToggle = () => {
+    if (!canChangeEnvironment) return;
+    if (isOnlineMode) {
+      emitJourneyControl(
+        'SET_TIME',
+        undefined,
+        undefined,
+        timeOfDay === 'day' ? 'NIGHT' : 'DAY'
+      );
+      return;
+    }
+    toggleTimeOfDay();
+  };
 
   const renderCameraIcon = (mode: CameraMode) => {
     if (mode === 'interior') return <Eye className="w-4 h-4" />;
@@ -91,7 +115,13 @@ export const TopRightControlPanel: React.FC = () => {
         {/* Day / Night Mode Toggle */}
         <button
           type="button"
-          onClick={toggleTimeOfDay}
+          onClick={handleTimeToggle}
+          disabled={!canChangeEnvironment}
+          title={
+            isOnlineMode && !canChangeEnvironment
+              ? 'Chỉ chủ phòng, tài xế hoặc phụ xe được đổi thời gian'
+              : 'Đổi thời gian của chuyến xe'
+          }
           className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-semibold backdrop-blur-md border transition-all shadow-lg ${
             timeOfDay === 'day'
               ? 'bg-sky-950/75 border-sky-700/60 text-sky-200 hover:bg-sky-900/80'

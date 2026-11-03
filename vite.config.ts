@@ -14,7 +14,7 @@ export default defineConfig({
         manualChunks: {
           three: ['three'],
           r3f: ['@react-three/fiber', '@react-three/drei'],
-          vendor: ['react', 'react-dom', 'zustand', 'lucide-react', 'socket.io-client'],
+          vendor: ['react', 'react-dom', 'zustand', 'lucide-react', 'peerjs'],
         },
       },
     },

@@ -1,25 +1,22 @@
 import { create } from 'zustand';
-import { io, Socket } from 'socket.io-client';
 import {
   AssignRolePayload,
-  AuthResponseDto,
   AuthUserDto,
   BusRouteDto,
   ChatMessageDto,
   CreateRoomPayload,
   DEFAULT_ROUTES,
   JourneyControlPayload,
+  JourneyTimeOfDay,
+  JourneyWeather,
   LoginRequestDto,
   MultiplayerPlayerState,
   MusicControlPayload,
-  MusicStateDto,
   PlayerRole,
   RegisterRequestDto,
   RoomFullStateDto,
   RoomSummaryDto,
-   SharedEmoteType,
-  SOCKET_EVENTS,
-  SOCKET_NAMESPACE,
+  SharedEmoteType,
   TicketActionPayload,
 } from '@virtual-bus/shared';
 import { useCharacterStore } from './useCharacterStore';
@@ -28,45 +25,40 @@ import { useChatStore } from './useChatStore';
 import { useGameStore } from './useGameStore';
 import { useInteractionStore } from './useInteractionStore';
 import { musicAudioEngine } from '../services/musicAudioEngine';
+import { p2pBusNetwork } from '../services/p2pBusNetwork';
 import { CharacterData } from '../game/character/characterTypes';
-
-const BACKEND_URL =
-  import.meta.env.VITE_BACKEND_URL || 'http://localhost:4000';
+import { SeatData } from '../game/seat/seatTypes';
 
 interface MultiplayerStoreState {
   isOnlineMode: boolean;
   isConnected: boolean;
+  isHostPeer: boolean;
+  p2pStatusText: string;
+  connectionLabel: string;
   isLobbyModalOpen: boolean;
   isSocialPanelOpen: boolean;
   activeSocialTab: 'chat' | 'journey' | 'tickets' | 'music' | 'roles';
-
   user: AuthUserDto | null;
   accessToken: string | null;
   authError: string | null;
-
   routes: BusRouteDto[];
   rooms: RoomSummaryDto[];
   currentRoom: RoomFullStateDto | null;
   privateChatTargetId: string | null;
 
-  // Actions
   setLobbyModalOpen: (open: boolean) => void;
   setSocialPanelOpen: (open: boolean) => void;
   setActiveSocialTab: (
     tab: 'chat' | 'journey' | 'tickets' | 'music' | 'roles'
   ) => void;
   setPrivateChatTargetId: (playerId: string | null) => void;
-
   login: (dto: LoginRequestDto) => Promise<boolean>;
   register: (dto: RegisterRequestDto) => Promise<boolean>;
   logout: () => void;
-
   fetchRoomsAndRoutes: () => Promise<void>;
   createAndJoinRoom: (dto: CreateRoomPayload) => Promise<boolean>;
   joinRoom: (roomId: string) => void;
   leaveCurrentRoom: () => void;
-
-  // Realtime Socket Emitters
   emitMoveThrottled: (
     position: [number, number, number],
     rotationY: number,
@@ -75,11 +67,15 @@ interface MultiplayerStoreState {
   ) => void;
   emitSit: (seatId: string) => void;
   emitStand: () => void;
+  emitDisembark: () => void;
+  emitReturnToBus: () => void;
   emitEmote: (emote: SharedEmoteType) => void;
   emitChatMessage: (content: string, recipientId?: string | null) => void;
   emitJourneyControl: (
     action: JourneyControlPayload['action'],
-    announcement?: string
+    announcement?: string,
+    weather?: JourneyWeather,
+    timeOfDay?: JourneyTimeOfDay
   ) => void;
   emitTicketAction: (
     action: TicketActionPayload['action'],
@@ -92,8 +88,43 @@ interface MultiplayerStoreState {
   emitRoleAssign: (targetPlayerId: string, role: PlayerRole) => void;
 }
 
-let socketInstance: Socket | null = null;
-let lastMoveEmitMs = 0;
+let savedOfflineScene: {
+  characters: Record<string, CharacterData>;
+  characterOrder: string[];
+  playerId: string;
+  seats: Record<string, SeatData>;
+} | null = null;
+
+function captureOfflineSceneIfNeeded(): void {
+  if (savedOfflineScene) return;
+  const charState = useCharacterStore.getState();
+  const seatState = useSeatStore.getState();
+  savedOfflineScene = {
+    characters: structuredClone(charState.characters),
+    characterOrder: [...charState.characterOrder],
+    playerId: charState.playerId,
+    seats: structuredClone(seatState.seats),
+  };
+}
+
+function restoreOfflineScene(): void {
+  if (!savedOfflineScene) return;
+  useCharacterStore.setState({
+    characters: structuredClone(savedOfflineScene.characters),
+    characterOrder: [...savedOfflineScene.characterOrder],
+    playerId: savedOfflineScene.playerId,
+  });
+  useSeatStore.setState({
+    seats: structuredClone(savedOfflineScene.seats),
+  });
+  useGameStore.setState({
+    tripName: 'Chuyến Xe Miền Tây #VB-108',
+    routeName: 'TP.HCM → Tiền Giang → Cần Thơ',
+    busSpeedKmh: 62,
+    isPaused: false,
+    journeyStatus: 'Đang chạy trên hành trình',
+  });
+}
 
 function mapMultiplayerPlayerToCharacterData(
   mp: MultiplayerPlayerState,
@@ -101,12 +132,11 @@ function mapMultiplayerPlayerToCharacterData(
   existing?: CharacterData
 ): CharacterData {
   const roleLabelMap: Record<PlayerRole, string> = {
-    OWNER: 'Chủ phòng',
+    OWNER: 'Chủ phòng P2P',
     DRIVER: 'Bác tài xế',
     ASSISTANT: 'Phụ xe',
     PASSENGER: 'Hành khách',
   };
-
   return {
     id: mp.playerId,
     name: `${mp.displayName} (${roleLabelMap[mp.role]})`,
@@ -125,97 +155,174 @@ function mapMultiplayerPlayerToCharacterData(
     pantsColor: '#1e293b',
     hairColor: '#18181b',
     hometown: roleLabelMap[mp.role],
-    bio: `Thành viên trực tuyến (${mp.username}) • Vai trò: ${roleLabelMap[mp.role]}`,
+    bio: `Kết nối P2P (${mp.username}) • Vai trò: ${roleLabelMap[mp.role]}`,
     activityLabel:
       mp.state === 'sitting'
         ? `Đang ngồi ghế ${mp.seatId ?? ''}`
         : mp.state === 'walking'
           ? 'Đang đi trên lối đi'
-          : 'Đang trực tuyến trên xe',
+          : 'Đang trực tuyến P2P trên xe',
   };
 }
 
 function syncRoomTo3DScene(room: RoomFullStateDto, selfPlayerId: string): void {
-  // 1. Sync Characters without recreating existing character references unnecessarily
+  captureOfflineSceneIfNeeded();
+
   const charStore = useCharacterStore.getState();
   const nextCharacters: Record<string, CharacterData> = {};
   const nextOrder: string[] = [];
-
   for (const mp of Object.values(room.players)) {
     if (!mp.connected) continue;
-    const isSelf = mp.playerId === selfPlayerId;
-    const existing = charStore.characters[mp.playerId];
     nextCharacters[mp.playerId] = mapMultiplayerPlayerToCharacterData(
       mp,
-      isSelf,
-      existing
+      mp.playerId === selfPlayerId,
+      charStore.characters[mp.playerId]
     );
     nextOrder.push(mp.playerId);
   }
-
   useCharacterStore.setState({
     characters: nextCharacters,
     characterOrder: nextOrder,
     playerId: selfPlayerId,
   });
 
-  // 2. Sync Authoritative Seats (28 seats)
   const seatStore = useSeatStore.getState();
   const updatedSeats = { ...seatStore.seats };
   for (const seatId of seatStore.seatOrder) {
+    const seat = updatedSeats[seatId];
+    if (!seat) continue;
     const occupantId = room.seats[seatId] ?? null;
-    if (updatedSeats[seatId]) {
-      updatedSeats[seatId] = {
-        ...updatedSeats[seatId],
-        occupantId,
-        occupied: occupantId !== null,
-      };
-    }
+    updatedSeats[seatId] = {
+      ...seat,
+      occupantId,
+      occupied: occupantId !== null,
+    };
   }
   useSeatStore.setState({ seats: updatedSeats });
 
-  // 3. Sync Bus Journey & Route Telemetry to GameStore
   const currentStop =
     room.route.stops[room.journey.currentStopOrder] ?? room.route.stops[0];
+  const nextStop =
+    room.route.stops[
+      Math.min(room.route.stops.length - 1, room.journey.currentStopOrder + 1)
+    ] ?? currentStop;
   useGameStore.setState({
-    tripName: `${room.name}`,
+    tripName: `${room.name} [${room.roomId}]`,
     routeName: room.route.name,
     busSpeedKmh: room.journey.speedKmh,
     isPaused: room.journey.status !== 'IN_TRANSIT',
     journeyStatus:
       room.journey.status === 'IN_TRANSIT'
-        ? `Đang chạy • Hướng tới: ${
-            room.route.stops[
-              Math.min(
-                room.route.stops.length - 1,
-                room.journey.currentStopOrder + 1
-              )
-            ]?.name ?? currentStop.name
-          }`
+        ? `Đang chạy • Hướng tới: ${nextStop.name}`
         : room.journey.status === 'AT_STOP'
           ? `Đang dừng tại: ${currentStop.name}`
           : room.journey.status === 'FINISHED'
             ? 'Đã tới bến cuối'
             : 'Đang tạm dừng',
   });
-
-  // 4. Sync Music Player
+  const weatherMap: Record<JourneyWeather, 'sunny' | 'cloudy' | 'rainy'> = {
+    SUNNY: 'sunny',
+    CLOUDY: 'cloudy',
+    RAINY: 'rainy',
+  };
+  useGameStore.getState().setWeather(weatherMap[room.journey.weather]);
+  useGameStore
+    .getState()
+    .setTimeOfDay(room.journey.timeOfDay === 'NIGHT' ? 'night' : 'day');
   musicAudioEngine.syncState(room.music);
 }
+
+let lastMoveEmitMs = 0;
+
+p2pBusNetwork.setCallbacks({
+  onRoomJoined: (room, selfPlayerId, isHost) => {
+    useMultiplayerStore.setState({
+      currentRoom: room,
+      isOnlineMode: true,
+      isConnected: true,
+      isHostPeer: isHost,
+      isLobbyModalOpen: false,
+      isSocialPanelOpen: true,
+    });
+    syncRoomTo3DScene(room, selfPlayerId);
+    useInteractionStore
+      .getState()
+      .showStatusToast(
+        `Đã kết nối P2P vào phòng "${room.name}" [Mã: ${room.roomId}]!`
+      );
+  },
+  onRoomStateUpdated: (room, toastMessage) => {
+    const selfId = useMultiplayerStore.getState().user?.id;
+    useMultiplayerStore.setState({ currentRoom: room });
+    if (selfId) syncRoomTo3DScene(room, selfId);
+    if (toastMessage)
+      useInteractionStore.getState().showStatusToast(toastMessage);
+  },
+  onPlayerMoved: (move) => {
+    const charStore = useCharacterStore.getState();
+    if (move.playerId === charStore.playerId) return;
+    charStore.updateCharacterTransform(
+      move.playerId,
+      move.position,
+      move.rotationY
+    );
+    charStore.setCharacterStateAndAnimation(
+      move.playerId,
+      move.state,
+      move.animation
+    );
+  },
+  onPlayerEmote: (playerId, emote) => {
+    useCharacterStore.getState().triggerCharacterEmote(playerId, emote);
+  },
+  onChatMessage: (message: ChatMessageDto, room) => {
+    useMultiplayerStore.setState({ currentRoom: room });
+    if (message.senderId !== 'system') {
+      const prefix = message.scope === 'PRIVATE' ? '🔒 [Riêng] ' : '';
+      useChatStore
+        .getState()
+        .sendChatBubble(
+          message.senderId,
+          message.senderName,
+          `${prefix}${message.content}`,
+          5200
+        );
+    } else {
+      useInteractionStore.getState().showStatusToast(message.content);
+    }
+  },
+  onRoomListUpdated: (rooms) => useMultiplayerStore.setState({ rooms }),
+  onWalletUpdated: (walletBalance) => {
+    const user = useMultiplayerStore.getState().user;
+    if (user)
+      useMultiplayerStore.setState({ user: { ...user, walletBalance } });
+  },
+  onErrorToast: (message) =>
+    useInteractionStore.getState().showStatusToast(message),
+  onConnectionStatusChange: (connected, modeLabel) => {
+    useMultiplayerStore.setState({
+      isConnected: connected,
+      isOnlineMode: connected,
+      p2pStatusText: modeLabel,
+      connectionLabel: modeLabel,
+    });
+  },
+});
 
 export const useMultiplayerStore = create<MultiplayerStoreState>((set, get) => ({
   isOnlineMode: false,
   isConnected: false,
+  isHostPeer: false,
+  p2pStatusText: 'Chưa kết nối P2P',
+  connectionLabel: 'Chưa kết nối P2P',
   isLobbyModalOpen: false,
   isSocialPanelOpen: false,
   activeSocialTab: 'chat',
-
   user: null,
   accessToken: null,
   authError: null,
-
   routes: DEFAULT_ROUTES,
-  rooms: [],
+  rooms: p2pBusNetwork.getDiscoveredRooms(),
   currentRoom: null,
   privateChatTargetId: null,
 
@@ -231,543 +338,118 @@ export const useMultiplayerStore = create<MultiplayerStoreState>((set, get) => (
     }),
 
   login: async (dto) => {
-    set({ authError: null });
-    try {
-      const res = await fetch(`${BACKEND_URL}/api/auth/login`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(dto),
-      });
-      const data = await res.json();
-      if (!res.ok) {
-        set({ authError: data?.message || 'Đăng nhập thất bại.' });
-        return false;
-      }
-
-      const authData = data as AuthResponseDto;
-      set({
-        user: authData.user,
-        accessToken: authData.accessToken,
-        authError: null,
-      });
-
-      connectSocket(authData.accessToken, set, get);
-      await get().fetchRoomsAndRoutes();
-      return true;
-    } catch {
-      set({
-        authError:
-          'Không kết nối được Backend (Hãy chạy `npm run dev:backend` tại cổng 4000).',
-      });
+    const result = p2pBusNetwork.loginLocal(dto);
+    if (!result.user) {
+      set({ authError: result.error ?? 'Đăng nhập thất bại.' });
       return false;
     }
+    set({ user: result.user, authError: null });
+    await get().fetchRoomsAndRoutes();
+    return true;
   },
 
   register: async (dto) => {
-    set({ authError: null });
-    try {
-      const res = await fetch(`${BACKEND_URL}/api/auth/register`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(dto),
-      });
-      const data = await res.json();
-      if (!res.ok) {
-        set({ authError: data?.message || 'Đăng ký thất bại.' });
-        return false;
-      }
-
-      const authData = data as AuthResponseDto;
-      set({
-        user: authData.user,
-        accessToken: authData.accessToken,
-        authError: null,
-      });
-
-      connectSocket(authData.accessToken, set, get);
-      await get().fetchRoomsAndRoutes();
-      return true;
-    } catch {
-      set({
-        authError:
-          'Không kết nối được Backend (Hãy chạy `npm run dev:backend` tại cổng 4000).',
-      });
+    const result = p2pBusNetwork.registerLocal(dto);
+    if (!result.user) {
+      set({ authError: result.error ?? 'Đăng ký thất bại.' });
       return false;
     }
+    set({ user: result.user, authError: null });
+    await get().fetchRoomsAndRoutes();
+    return true;
   },
 
   logout: () => {
-    const currentRoom = get().currentRoom;
-    if (socketInstance && currentRoom) {
-      socketInstance.emit(SOCKET_EVENTS.ROOM_LEAVE, {
-        roomId: currentRoom.roomId,
-      });
-    }
-    if (socketInstance) {
-      socketInstance.disconnect();
-      socketInstance = null;
-    }
+    p2pBusNetwork.leaveRoom();
     musicAudioEngine.stopLoop();
+    restoreOfflineScene();
     set({
       isOnlineMode: false,
       isConnected: false,
+      isHostPeer: false,
       user: null,
       accessToken: null,
       currentRoom: null,
+      p2pStatusText: 'Chưa kết nối P2P',
+      connectionLabel: 'Chưa kết nối P2P',
     });
   },
 
   fetchRoomsAndRoutes: async () => {
-    try {
-      const [roomsRes, routesRes] = await Promise.all([
-        fetch(`${BACKEND_URL}/api/rooms`),
-        fetch(`${BACKEND_URL}/api/routes`),
-      ]);
-      if (roomsRes.ok) {
-        const rooms = (await roomsRes.json()) as RoomSummaryDto[];
-        set({ rooms });
-      }
-      if (routesRes.ok) {
-        const routes = (await routesRes.json()) as BusRouteDto[];
-        set({ routes });
-      }
-    } catch {
-      // Ignore if backend offline
-    }
+    const rooms = p2pBusNetwork.getDiscoveredRooms();
+    set({ rooms, routes: DEFAULT_ROUTES });
   },
 
   createAndJoinRoom: async (dto) => {
-    const token = get().accessToken;
-    if (!token) return false;
-
-    try {
-      const res = await fetch(`${BACKEND_URL}/api/rooms`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify(dto),
-      });
-      if (!res.ok) return false;
-      const room = (await res.json()) as RoomFullStateDto;
-      await get().fetchRoomsAndRoutes();
-      get().joinRoom(room.roomId);
-      return true;
-    } catch {
-      return false;
-    }
+    const user = get().user;
+    if (!user) return false;
+    p2pBusNetwork.createRoomAndConnect(dto, user);
+    return true;
   },
 
   joinRoom: (roomId) => {
-    if (!socketInstance) return;
-    socketInstance.emit(SOCKET_EVENTS.ROOM_JOIN, { roomId });
+    const user = get().user;
+    if (!user) {
+      set({ authError: 'Hãy đăng nhập trước khi tham gia chuyến xe.' });
+      return;
+    }
+    p2pBusNetwork.connectToRoomByCode(roomId, user);
   },
 
   leaveCurrentRoom: () => {
-    const room = get().currentRoom;
-    if (socketInstance && room) {
-      socketInstance.emit(SOCKET_EVENTS.ROOM_LEAVE, { roomId: room.roomId });
-    }
+    p2pBusNetwork.leaveRoom();
     musicAudioEngine.stopLoop();
+    restoreOfflineScene();
     set({
       currentRoom: null,
       isOnlineMode: false,
+      isConnected: false,
+      isHostPeer: false,
+      p2pStatusText: 'Đã rời phòng P2P',
+      connectionLabel: 'Đã rời phòng P2P',
       isLobbyModalOpen: true,
     });
   },
 
   emitMoveThrottled: (position, rotationY, state, animation) => {
-    const room = get().currentRoom;
-    if (!socketInstance || !room || !get().isOnlineMode) return;
-
+    if (!get().currentRoom || !get().isOnlineMode) return;
     const now = performance.now();
-    // Rate-limit movement packets to ~14 updates/sec (70ms) unless stopping (idle)
-    if (state === 'walking' && now - lastMoveEmitMs < 70) {
-      return;
-    }
+    if (state === 'walking' && now - lastMoveEmitMs < 70) return;
     lastMoveEmitMs = now;
-
-    socketInstance.emit(SOCKET_EVENTS.PLAYER_MOVE, {
-      roomId: room.roomId,
-      position,
-      rotationY,
-      state,
-      animation,
-    });
+    p2pBusNetwork.sendAction('MOVE', { position, rotationY, state, animation });
   },
-
-  emitSit: (seatId) => {
-    const room = get().currentRoom;
-    if (!socketInstance || !room || !get().isOnlineMode) return;
-    socketInstance.emit(SOCKET_EVENTS.PLAYER_SIT, {
-      roomId: room.roomId,
-      seatId,
-    });
-  },
-
-  emitStand: () => {
-    const room = get().currentRoom;
-    if (!socketInstance || !room || !get().isOnlineMode) return;
-    socketInstance.emit(SOCKET_EVENTS.PLAYER_STAND, {
-      roomId: room.roomId,
-    });
-  },
-
-  emitEmote: (emote) => {
-    const room = get().currentRoom;
-    if (!socketInstance || !room || !get().isOnlineMode) return;
-    socketInstance.emit(SOCKET_EVENTS.PLAYER_EMOTE, {
-      roomId: room.roomId,
-      emote,
-    });
-  },
-
-  emitChatMessage: (content, recipientId = null) => {
-    const room = get().currentRoom;
-    if (!socketInstance || !room || !get().isOnlineMode) return;
-    socketInstance.emit(SOCKET_EVENTS.CHAT_SEND, {
-      roomId: room.roomId,
-      content,
-      recipientId,
-    });
-  },
-
-  emitJourneyControl: (action, announcement) => {
-    const room = get().currentRoom;
-    if (!socketInstance || !room) return;
-    socketInstance.emit(SOCKET_EVENTS.JOURNEY_START, {
-      roomId: room.roomId,
+  emitSit: (seatId) => p2pBusNetwork.sendAction('SIT', { seatId }),
+  emitStand: () => p2pBusNetwork.sendAction('STAND', {}),
+  emitDisembark: () => p2pBusNetwork.sendAction('DISEMBARK', {}),
+  emitReturnToBus: () => p2pBusNetwork.sendAction('RETURN_TO_BUS', {}),
+  emitEmote: (emote) => p2pBusNetwork.sendAction('EMOTE', { emote }),
+  emitChatMessage: (content, recipientId = null) =>
+    p2pBusNetwork.sendAction('CHAT', { content, recipientId }),
+  emitJourneyControl: (action, announcement, weather, timeOfDay) =>
+    p2pBusNetwork.sendAction('JOURNEY', {
       action,
       announcement,
-    });
-  },
-
+      weather,
+      timeOfDay,
+    }),
   emitTicketAction: (action, targetPlayerId) => {
-    const room = get().currentRoom;
     const selfId = get().user?.id;
-    if (!socketInstance || !room || !selfId) return;
-    socketInstance.emit(SOCKET_EVENTS.TICKET_PAY, {
-      roomId: room.roomId,
+    if (!selfId) return;
+    p2pBusNetwork.sendAction('TICKET', {
       targetPlayerId: targetPlayerId ?? selfId,
       action,
     });
   },
-
   emitMusicControl: (action, volume) => {
-    const room = get().currentRoom;
-    if (!socketInstance || !room) return;
     if (action === 'VOLUME' && typeof volume === 'number') {
       musicAudioEngine.setLocalVolume(volume);
     }
-    socketInstance.emit(SOCKET_EVENTS.MUSIC_PLAY, {
-      roomId: room.roomId,
-      action,
-      volume,
-    });
+    p2pBusNetwork.sendAction('MUSIC', { action, volume });
   },
-
   emitRoleAssign: (targetPlayerId, role) => {
-    const room = get().currentRoom;
-    if (!socketInstance || !room) return;
-    socketInstance.emit(SOCKET_EVENTS.ROLE_ASSIGN, {
-      roomId: room.roomId,
-      targetPlayerId,
-      role,
-    } satisfies AssignRolePayload);
+    const roomId = get().currentRoom?.roomId;
+    if (!roomId) return;
+    const payload: AssignRolePayload = { roomId, targetPlayerId, role };
+    p2pBusNetwork.sendAction('ROLE', payload);
   },
 }));
-
-function connectSocket(
-  token: string,
-  set: (partial: Partial<MultiplayerStoreState> | ((s: MultiplayerStoreState) => Partial<MultiplayerStoreState>)) => void,
-  get: () => MultiplayerStoreState
-): void {
-  if (socketInstance) {
-    socketInstance.disconnect();
-  }
-
-  const socket = io(`${BACKEND_URL}${SOCKET_NAMESPACE}`, {
-    auth: { token },
-    transports: ['websocket', 'polling'],
-    reconnection: true,
-    reconnectionAttempts: 10,
-    reconnectionDelay: 1000,
-  });
-
-  socketInstance = socket;
-
-  socket.on('connect', () => {
-    set({ isConnected: true });
-    // Reconnect recovery: if player was in a room before a brief network drop, rejoin automatically
-    const activeRoom = get().currentRoom;
-    if (activeRoom) {
-      socket.emit(SOCKET_EVENTS.ROOM_JOIN, { roomId: activeRoom.roomId });
-    }
-  });
-
-  socket.on('disconnect', () => {
-    set({ isConnected: false });
-  });
-
-  socket.on(
-    SOCKET_EVENTS.ROOM_JOINED,
-    (payload: { room: RoomFullStateDto; selfPlayerId: string }) => {
-      set({
-        currentRoom: payload.room,
-        isOnlineMode: true,
-        isLobbyModalOpen: false,
-        isSocialPanelOpen: true,
-      });
-      syncRoomTo3DScene(payload.room, payload.selfPlayerId);
-      useInteractionStore
-        .getState()
-        .showStatusToast(`Đã vào phòng "${payload.room.name}" thành công!`);
-    }
-  );
-
-  socket.on(SOCKET_EVENTS.ROOM_STATE, (room: RoomFullStateDto) => {
-    const selfId = get().user?.id;
-    if (!selfId) return;
-    set({ currentRoom: room });
-    syncRoomTo3DScene(room, selfId);
-  });
-
-  socket.on(SOCKET_EVENTS.ROOM_LIST_UPDATED, (rooms: RoomSummaryDto[]) => {
-    set({ rooms });
-  });
-
-  socket.on(
-    SOCKET_EVENTS.ROOM_PLAYER_JOINED,
-    (payload: {
-      player: MultiplayerPlayerState;
-      seats: Record<string, string | null>;
-    }) => {
-      const room = get().currentRoom;
-      const selfId = get().user?.id;
-      if (!room || !selfId) return;
-
-      const updatedRoom: RoomFullStateDto = {
-        ...room,
-        players: {
-          ...room.players,
-          [payload.player.playerId]: payload.player,
-        },
-        seats: payload.seats,
-      };
-      set({ currentRoom: updatedRoom });
-      syncRoomTo3DScene(updatedRoom, selfId);
-      useInteractionStore
-        .getState()
-        .showStatusToast(`${payload.player.displayName} vừa lên xe!`);
-    }
-  );
-
-  socket.on(
-    SOCKET_EVENTS.ROOM_PLAYER_LEFT,
-    (payload: { playerId: string; seats: Record<string, string | null> }) => {
-      const room = get().currentRoom;
-      const selfId = get().user?.id;
-      if (!room || !selfId) return;
-
-      const nextPlayers = { ...room.players };
-      delete nextPlayers[payload.playerId];
-
-      const updatedRoom: RoomFullStateDto = {
-        ...room,
-        players: nextPlayers,
-        seats: payload.seats,
-      };
-      set({ currentRoom: updatedRoom });
-      syncRoomTo3DScene(updatedRoom, selfId);
-    }
-  );
-
-  socket.on(
-    SOCKET_EVENTS.PLAYER_MOVED,
-    (payload: {
-      playerId: string;
-      position: [number, number, number];
-      rotationY: number;
-      state: MultiplayerPlayerState['state'];
-      animation: MultiplayerPlayerState['animation'];
-    }) => {
-      const charStore = useCharacterStore.getState();
-      if (payload.playerId === charStore.playerId) return;
-      charStore.updateCharacterTransform(
-        payload.playerId,
-        payload.position,
-        payload.rotationY
-      );
-      charStore.setCharacterStateAndAnimation(
-        payload.playerId,
-        payload.state,
-        payload.animation
-      );
-    }
-  );
-
-  socket.on(
-    SOCKET_EVENTS.PLAYER_SAT,
-    (payload: {
-      player: MultiplayerPlayerState;
-      seats: Record<string, string | null>;
-      ticket: RoomFullStateDto['tickets'][string];
-    }) => {
-      const room = get().currentRoom;
-      const selfId = get().user?.id;
-      if (!room || !selfId) return;
-
-      const updatedRoom: RoomFullStateDto = {
-        ...room,
-        players: {
-          ...room.players,
-          [payload.player.playerId]: payload.player,
-        },
-        seats: payload.seats,
-        tickets: {
-          ...room.tickets,
-          [payload.player.playerId]: payload.ticket,
-        },
-      };
-      set({ currentRoom: updatedRoom });
-      syncRoomTo3DScene(updatedRoom, selfId);
-    }
-  );
-
-  socket.on(
-    SOCKET_EVENTS.PLAYER_STOOD,
-    (payload: {
-      player: MultiplayerPlayerState;
-      seats: Record<string, string | null>;
-    }) => {
-      const room = get().currentRoom;
-      const selfId = get().user?.id;
-      if (!room || !selfId) return;
-
-      const updatedRoom: RoomFullStateDto = {
-        ...room,
-        players: {
-          ...room.players,
-          [payload.player.playerId]: payload.player,
-        },
-        seats: payload.seats,
-      };
-      set({ currentRoom: updatedRoom });
-      syncRoomTo3DScene(updatedRoom, selfId);
-    }
-  );
-
-  socket.on(
-    SOCKET_EVENTS.PLAYER_EMOTE_BROADCAST,
-    (payload: { playerId: string; emote: SharedEmoteType }) => {
-      useCharacterStore
-        .getState()
-        .triggerCharacterEmote(payload.playerId, payload.emote);
-    }
-  );
-
-  socket.on(SOCKET_EVENTS.CHAT_MESSAGE, (msg: ChatMessageDto) => {
-    const room = get().currentRoom;
-    if (room) {
-      set({
-        currentRoom: {
-          ...room,
-          chatHistory: [...room.chatHistory.slice(-59), msg],
-        },
-      });
-    }
-
-    // Show 3D overhead Chat Bubble on sender's head
-    if (msg.senderId !== 'system') {
-      const bubblePrefix =
-        msg.scope === 'PRIVATE' ? `🔒 [Riêng] ` : '';
-      useChatStore
-        .getState()
-        .sendChatBubble(
-          msg.senderId,
-          msg.senderName,
-          `${bubblePrefix}${msg.content}`,
-          5200
-        );
-    } else {
-      useInteractionStore.getState().showStatusToast(msg.content);
-    }
-  });
-
-  socket.on(
-    SOCKET_EVENTS.JOURNEY_UPDATED,
-    (payload: {
-      journey: RoomFullStateDto['journey'];
-      roomStatus: RoomFullStateDto['status'];
-    }) => {
-      const room = get().currentRoom;
-      const selfId = get().user?.id;
-      if (!room || !selfId) return;
-
-      const updatedRoom: RoomFullStateDto = {
-        ...room,
-        journey: payload.journey,
-        status: payload.roomStatus,
-      };
-      set({ currentRoom: updatedRoom });
-      syncRoomTo3DScene(updatedRoom, selfId);
-    }
-  );
-
-  socket.on(
-    SOCKET_EVENTS.TICKET_UPDATED,
-    (payload: {
-      tickets: RoomFullStateDto['tickets'];
-      updatedPlayer: MultiplayerPlayerState | null;
-    }) => {
-      const room = get().currentRoom;
-      const selfId = get().user?.id;
-      if (!room || !selfId) return;
-
-      const nextPlayers = { ...room.players };
-      if (payload.updatedPlayer) {
-        nextPlayers[payload.updatedPlayer.playerId] = payload.updatedPlayer;
-        if (payload.updatedPlayer.playerId === selfId) {
-          const currUser = get().user;
-          if (currUser) {
-            set({
-              user: {
-                ...currUser,
-                walletBalance: payload.updatedPlayer.walletBalance,
-              },
-            });
-          }
-        }
-      }
-
-      set({
-        currentRoom: {
-          ...room,
-          players: nextPlayers,
-          tickets: payload.tickets,
-        },
-      });
-    }
-  );
-
-  socket.on(SOCKET_EVENTS.MUSIC_UPDATED, (music: MusicStateDto) => {
-    const room = get().currentRoom;
-    if (room) {
-      set({
-        currentRoom: {
-          ...room,
-          music,
-        },
-      });
-    }
-    musicAudioEngine.syncState(music);
-  });
-
-  socket.on(SOCKET_EVENTS.SERVER_ERROR, (err: { message: string }) => {
-    if (err?.message) {
-      useInteractionStore.getState().showStatusToast(`⚠️ ${err.message}`);
-    }
-  });
-}
-

@@ -7,9 +7,11 @@ import { LIGHTING_CONFIG } from '../config/environmentConfig';
 export const SkyAndLighting: React.FC = () => {
   const timeOfDay = useGameStore((state) => state.timeOfDay);
   const graphicsQuality = useGameStore((state) => state.graphicsQuality);
+  const weather = useGameStore((state) => state.weather);
 
   const lighting = LIGHTING_CONFIG[timeOfDay];
   const isNight = timeOfDay === 'night';
+  const isOvercast = weather !== 'sunny';
 
   const skyColor = useMemo(() => new THREE.Color(lighting.skyBg), [lighting.skyBg]);
   const fogColor = useMemo(() => new THREE.Color(lighting.fogColor), [lighting.fogColor]);
@@ -19,11 +21,21 @@ export const SkyAndLighting: React.FC = () => {
 
   return (
     <group name="SkyAndLighting">
-      <color attach="background" args={[skyColor]} />
-      <fog attach="fog" args={[fogColor, lighting.fogNear, lighting.fogFar]} />
+      <color attach="background" args={[isOvercast ? '#8796a3' : skyColor]} />
+      <fog
+        attach="fog"
+        args={[
+          isOvercast ? '#8796a3' : fogColor,
+          isOvercast ? lighting.fogNear * 0.72 : lighting.fogNear,
+          isOvercast ? lighting.fogFar * 0.78 : lighting.fogFar,
+        ]}
+      />
 
       {/* Ambient & Hemisphere Base Illumination */}
-      <ambientLight intensity={lighting.ambientIntensity} color={lighting.ambientColor} />
+      <ambientLight
+        intensity={lighting.ambientIntensity * (isOvercast ? 0.78 : 1)}
+        color={isOvercast ? '#cbd5e1' : lighting.ambientColor}
+      />
       <hemisphereLight
         args={[lighting.hemiSkyColor, lighting.hemiGroundColor, lighting.hemiIntensity]}
       />
@@ -31,7 +43,7 @@ export const SkyAndLighting: React.FC = () => {
       {/* Primary Directional Light (Sun in Day / Moon in Night) */}
       <directionalLight
         position={lighting.sunPosition}
-        intensity={lighting.sunIntensity}
+        intensity={lighting.sunIntensity * (isOvercast ? 0.48 : 1)}
         color={lighting.sunColor}
         castShadow={graphicsQuality !== 'low'}
         shadow-mapSize-width={shadowMapSize}

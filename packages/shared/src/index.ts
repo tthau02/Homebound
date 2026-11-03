@@ -56,6 +56,9 @@ export type JourneyStatus =
   | 'PAUSED'
   | 'FINISHED';
 
+export type JourneyWeather = 'SUNNY' | 'CLOUDY' | 'RAINY';
+export type JourneyTimeOfDay = 'DAY' | 'NIGHT';
+
 export type TicketStatus = 'BOOKED' | 'PAID' | 'CHECKED' | 'CANCELLED';
 
 export type SharedCharacterState = 'idle' | 'walking' | 'sitting' | 'standing';
@@ -132,6 +135,8 @@ export interface BusJourneyDto {
   routeId: string;
   currentStopOrder: number;
   status: JourneyStatus;
+  weather: JourneyWeather;
+  timeOfDay: JourneyTimeOfDay;
   speedKmh: number;
   announcement: string | null;
   departureTime: string | null;
@@ -164,6 +169,7 @@ export interface MultiplayerPlayerState {
   animation: SharedAnimationType;
   activeEmote: SharedEmoteType | null;
   seatId: string | null;
+  isDisembarked: boolean;
   connected: boolean;
   walletBalance: number;
 }
@@ -274,8 +280,10 @@ export interface SendChatPayload {
 
 export interface JourneyControlPayload {
   roomId: string;
-  action: 'START' | 'PAUSE' | 'RESUME' | 'NEXT_STOP' | 'ARRIVE_STOP' | 'DEPART_STOP' | 'COMPLETE';
+  action: 'START' | 'PAUSE' | 'RESUME' | 'NEXT_STOP' | 'ARRIVE_STOP' | 'DEPART_STOP' | 'COMPLETE' | 'SET_WEATHER' | 'SET_TIME';
   announcement?: string;
+  weather?: JourneyWeather;
+  timeOfDay?: JourneyTimeOfDay;
 }
 
 export interface TicketActionPayload {

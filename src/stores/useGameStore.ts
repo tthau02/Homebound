@@ -1,7 +1,9 @@
 import { create } from 'zustand';
+import { JourneyWeather } from '@virtual-bus/shared';
 
 export type CameraMode = 'interior' | 'top-down' | 'chase';
 export type TimeOfDay = 'day' | 'night';
+export type WeatherMode = Lowercase<JourneyWeather>;
 export type GraphicsQuality = 'low' | 'medium' | 'high';
 
 export interface PassengerSeatInfo {
@@ -18,6 +20,7 @@ export interface PassengerSeatInfo {
 interface GameState {
   cameraMode: CameraMode;
   timeOfDay: TimeOfDay;
+  weather: WeatherMode;
   graphicsQuality: GraphicsQuality;
   busSpeedKmh: number;
   isPaused: boolean;
@@ -32,6 +35,7 @@ interface GameState {
   setCameraMode: (mode: CameraMode) => void;
   toggleTimeOfDay: () => void;
   setTimeOfDay: (time: TimeOfDay) => void;
+  setWeather: (weather: WeatherMode) => void;
   setGraphicsQuality: (quality: GraphicsQuality) => void;
   setBusSpeedKmh: (speed: number) => void;
   togglePause: () => void;
@@ -42,6 +46,7 @@ interface GameState {
 export const useGameStore = create<GameState>((set) => ({
   cameraMode: 'interior',
   timeOfDay: 'day',
+  weather: 'sunny',
   graphicsQuality: 'high',
   busSpeedKmh: 68,
   isPaused: false,
@@ -69,6 +74,8 @@ export const useGameStore = create<GameState>((set) => ({
       timeOfDay: time,
       headlightsOn: time === 'night',
     }),
+
+  setWeather: (weather) => set({ weather }),
 
   setGraphicsQuality: (quality) => set({ graphicsQuality: quality }),
 
