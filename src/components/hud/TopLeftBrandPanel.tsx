@@ -3,6 +3,7 @@ import { Bus, Globe, Radio } from 'lucide-react';
 import { useGameStore } from '../../stores/useGameStore';
 import { useMultiplayerStore } from '../../stores/useMultiplayerStore';
 import { HudBadge } from '../ui/HudBadge';
+import { APP_VERSION } from '../../config/featureFlags';
 
 export const TopLeftBrandPanel: React.FC = () => {
   const tripName = useGameStore((state) => state.tripName);
@@ -29,7 +30,7 @@ export const TopLeftBrandPanel: React.FC = () => {
             Virtual Bus
           </h1>
           <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-red-500/20 text-red-300 border border-red-500/30">
-            PHASE 3
+            v{APP_VERSION}
           </span>
         </div>
 

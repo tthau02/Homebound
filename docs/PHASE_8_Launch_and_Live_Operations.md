@@ -1,7 +1,16 @@
-# ROAD MATE — PHASE 8
+# VIRTUAL BUS — PHASE 8
 ## Launch & Live Operations
 
 **Mục tiêu:** Phát hành Roadmate có kiểm soát, thu hút nhóm người chơi đầu tiên, vận hành cộng đồng an toàn và cập nhật nội dung dựa trên dữ liệu thực tế.
+
+> **Phạm vi frontend-only hiện tại:** Không có backend, helpdesk, tài khoản tập trung, moderation team, analytics service hay live-ops server. Phase này cung cấp hướng dẫn/FAQ trong game, tệp góp ý do người chơi tự tải, feature flags build-time, release notes và checklist. Đây chưa phải quy trình vận hành alpha/beta đầy đủ.
+
+### Đã có trong bản frontend
+- Bảng hướng dẫn tự mở lần đầu, điều khiển, FAQ và nút trợ giúp mở lại.
+- Góp ý được xuất thành tệp cục bộ; không upload hoặc gửi tự động.
+- Release notes hiển thị trong game và có bản Markdown trong `docs/RELEASE_NOTES.md`.
+- Các cờ tính năng frontend tập trung tại `src/config/featureFlags.ts`.
+- Thông báo hành trình trong room đã được host phát tới các peer; không có global announcement service.
 
 ## 1. Phạm vi
 
@@ -26,11 +35,11 @@
 - Mời nhóm nhỏ người chơi.
 - Giới hạn số phòng và thời gian thử.
 - Có kênh nhận feedback.
-- Theo dõi crash, latency, tỷ lệ hoàn thành onboarding.
+- Thu thập feedback thủ công; telemetry tập trung chưa được bật.
 - Ưu tiên sửa lỗi và cải thiện trải nghiệm cốt lõi.
 
 ### Stage C — Open Beta
-- Mở đăng ký rộng hơn theo năng lực server.
+- Chỉ mở rộng sau khi xác nhận giới hạn static host, signaling và WebRTC trên mạng mục tiêu.
 - Công bố rõ đây là beta và các giới hạn.
 - Có lịch bảo trì và trạng thái dịch vụ.
 - Thử nghiệm sự kiện nhẹ.
@@ -85,7 +94,7 @@ Mỗi event cần:
 
 Chỉ thu thập dữ liệu cần thiết, minh bạch và theo chính sách quyền riêng tư.
 
-Chỉ số gợi ý:
+Chỉ số gợi ý (chỉ bật nếu có consent, chính sách và nơi xử lý phù hợp):
 - New registrations.
 - Activation: tỷ lệ người mới vào được chuyến và hoàn thành hành động đầu tiên.
 - Daily/weekly active users.
@@ -97,7 +106,7 @@ Chỉ số gợi ý:
 - Reconnect rate.
 - Retention D1/D7/D30.
 
-Không tối ưu chỉ số bằng cách gây nghiện, ép tương tác hoặc làm khó người dùng rời game. Đặt ngưỡng cảnh báo và mục tiêu sau khi có baseline thực tế.
+Hiện tại không có analytics instrumentation; không gửi event hoặc nội dung người chơi ra ngoài trình duyệt. Không tối ưu chỉ số bằng cách gây nghiện, ép tương tác hoặc làm khó người dùng rời game.
 
 ## 7. Release & content operations
 - Versioning và release notes.
@@ -112,8 +121,8 @@ Không tối ưu chỉ số bằng cách gây nghiện, ép tương tác hoặc 
 
 ## 8. Support process
 - FAQ và hướng dẫn.
-- Form gửi lỗi/feedback.
-- Mã ticket hỗ trợ.
+- Tệp feedback người chơi tự tải xuống và gửi qua kênh hỗ trợ được công bố riêng.
+- Mã ticket chỉ có thể cấp khi tổ chức chọn helpdesk bên ngoài.
 - Phân loại lỗi kỹ thuật, tài khoản, thanh toán (nếu có), an toàn.
 - SLA nội bộ theo mức độ ưu tiên.
 - Thông báo tiến độ xử lý.
@@ -131,6 +140,8 @@ Không tối ưu chỉ số bằng cách gây nghiện, ép tương tác hoặc 
 - Support/Contact page.
 - Release notes.
 - Status page hoặc kênh thông báo sự cố.
+
+Hướng dẫn và release notes hiện đã có trong ứng dụng/docs. Các trang pháp lý, liên hệ hỗ trợ và status page chưa được tạo hoặc công bố vì cần chủ sở hữu, kênh liên hệ và review phù hợp.
 
 Các tài liệu pháp lý cần được rà soát phù hợp với quốc gia và thị trường phát hành; không dùng mẫu chung mà không kiểm tra.
 
@@ -151,27 +162,28 @@ Các tài liệu pháp lý cần được rà soát phù hợp với quốc gia 
 
 ## 11. Tiêu chí nghiệm thu
 
-- [ ] Có landing page và hướng dẫn bắt đầu.
-- [ ] Onboarding giúp người mới vào được chuyến xe.
+- [ ] Có website landing page công khai.
+- [x] Có hướng dẫn bắt đầu và FAQ trong game.
+- [ ] Onboarding được kiểm chứng với người chơi mới trên browser/device mục tiêu.
 - [ ] Có Terms, Privacy Policy và Community Guidelines phù hợp.
-- [ ] Có kênh support và quy trình xử lý ticket.
-- [ ] Có moderator và quy trình report/appeal.
+- [ ] Có kênh support và quy trình xử lý ticket do chủ dự án cung cấp.
+- [ ] Có moderator và quy trình report/appeal vận hành ngoài ứng dụng.
 - [ ] Closed alpha đã được kiểm thử và tổng hợp feedback.
 - [ ] Open beta có giới hạn vận hành và kênh thông báo.
-- [ ] Analytics có consent/chính sách phù hợp và không thu thập quá mức.
-- [ ] Có release notes, feature flags và rollback plan.
+- [x] Không có analytics tracking mặc định; hiện không thu thập product analytics.
+- [x] Có release notes và feature flags build-time; deployment rollback chưa cấu hình.
 - [ ] Có lịch nội dung/sự kiện ban đầu.
 - [ ] Có quy trình xử lý sự cố và thông báo bảo trì.
 - [ ] Có báo cáo sau launch và backlog cải tiến.
 
 ## 12. Prompt giao cho AI code
 
-Hãy triển khai Phase 8 của Roadmate dựa trên codebase và hạ tầng đã hoàn thiện ở Phase 7.
+Hãy triển khai Phase 8 của Virtual Bus trên kiến trúc frontend-only/P2P; không giả định có backend hay hạ tầng moderation/support.
 
-Tập trung vào các hạng mục sản phẩm có thể triển khai trong codebase: onboarding, landing page, FAQ, in-game announcements, support/feedback flow, feature flags, release notes và analytics events tối thiểu.
+Tập trung vào onboarding, FAQ, thông báo trong room, feedback flow có consent, feature flags frontend, release notes và checklist launch. Không tự thêm analytics hoặc upload feedback. Landing page/support channel cần xác nhận tên miền/kênh liên hệ trước khi triển khai thật.
 
 Không tự ý viết hoặc tuyên bố các tài liệu pháp lý đã được tư vấn pháp lý. Tạo bản nháp Terms, Privacy và Community Guidelines nếu được yêu cầu, đồng thời đánh dấu cần rà soát chuyên môn trước khi công bố.
 
 Không thêm tracking xâm phạm quyền riêng tư. Chỉ ghi nhận event cần thiết, không đưa nội dung chat riêng hoặc thông tin nhạy cảm vào analytics.
 
-Chuẩn bị các checklist internal test, closed alpha, open beta và release 1.0. Kiểm tra feature flag, maintenance mode, thông báo và rollback. Cập nhật README/runbook và báo cáo những việc cần con người thực hiện ngoài code, như moderation, hỗ trợ người chơi và trực vận hành.
+Chuẩn bị checklist internal test, closed alpha, open beta và release 1.0. Kiểm tra feature flag và thông báo trong room; ghi rõ maintenance mode, telemetry, global announcements, moderation, ticket support, hosting và rollback cần dịch vụ/chủ sở hữu bên ngoài. Cập nhật README/runbook và báo cáo các việc con người phải thực hiện trước khi mở alpha.
