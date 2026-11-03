@@ -238,6 +238,7 @@ export interface JoinRoomPayload {
 }
 
 export interface CreateRoomPayload {
+  roomCode?: string;
   name: string;
   routeId: string;
   maxPlayers?: number;
@@ -441,3 +442,4 @@ export const DEFAULT_ROUTES: BusRouteDto[] = [
     ],
   },
 ];
+
