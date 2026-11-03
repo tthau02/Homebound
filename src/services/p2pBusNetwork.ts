@@ -72,7 +72,14 @@ export type P2PPacket =
         | 'MUSIC'
         | 'ROLE'
         | 'DISEMBARK'
-        | 'RETURN_TO_BUS';
+        | 'RETURN_TO_BUS'
+        | 'BLOCK'
+        | 'UNBLOCK'
+        | 'REPORT'
+        | 'MATCHMAKING'
+        | 'FRIEND_REQUEST'
+        | 'FRIEND_RESPONSE'
+        | 'PROFILE';
       payload: unknown;
     }
   | {
@@ -100,7 +107,7 @@ export type P2PPacket =
       type: 'HOST_CHAT_MSG';
       roomId: string;
       message: ChatMessageDto;
-      room: RoomFullStateDto;
+      room?: RoomFullStateDto;
     }
   | {
       id: string;
@@ -108,6 +115,42 @@ export type P2PPacket =
       roomId: string;
       targetPlayerId: string;
       message: string;
+    }
+  | {
+      id: string;
+      type: 'HOST_FRIEND_REQUEST';
+      roomId: string;
+      requesterId: string;
+      requesterName: string;
+    }
+  | {
+      id: string;
+      type: 'HOST_FRIEND_RESPONSE';
+      roomId: string;
+      responderId: string;
+      accepted: boolean;
+    }
+  | {
+      id: string;
+      type: 'HOST_MATCH_OFFER';
+      roomId: string;
+      offerId: string;
+      otherPlayerId: string;
+      otherPlayerName: string;
+    }
+  | {
+      id: string;
+      type: 'HOST_MATCH_RESULT';
+      roomId: string;
+      offerId: string;
+      otherPlayerId: string;
+      accepted: boolean;
+    }
+  | {
+      id: string;
+      type: 'HOST_BLOCKED_STATE';
+      roomId: string;
+      playerIds: string[];
     };
 
 export interface P2PCallbacks {
@@ -115,11 +158,25 @@ export interface P2PCallbacks {
   onRoomStateUpdated: (room: RoomFullStateDto, toastMessage?: string) => void;
   onPlayerMoved: (move: PlayerMovePayload & { playerId: string }) => void;
   onPlayerEmote: (playerId: string, emote: PlayerEmotePayload['emote']) => void;
-  onChatMessage: (msg: ChatMessageDto, room: RoomFullStateDto) => void;
+  onChatMessage: (msg: ChatMessageDto, room?: RoomFullStateDto) => void;
   onRoomListUpdated: (rooms: RoomSummaryDto[]) => void;
   onWalletUpdated: (newBalance: number) => void;
+  onBlockedPlayers: (playerIds: string[]) => void;
+  onFriendRequest: (requesterId: string, requesterName: string) => void;
+  onFriendResponse: (playerId: string, accepted: boolean) => void;
+  onMatchOffer: (offerId: string, otherPlayerId: string, otherPlayerName: string) => void;
+  onMatchResult: (offerId: string, otherPlayerId: string, accepted: boolean) => void;
+  onModerationReports: (reports: P2PModerationReport[]) => void;
   onErrorToast: (msg: string) => void;
   onConnectionStatusChange: (connected: boolean, modeLabel: string) => void;
+}
+
+export interface P2PModerationReport {
+  id: string;
+  reporterId: string;
+  targetId: string;
+  reason: string;
+  createdAt: string;
 }
 
 const TAB_SESSION_SUFFIX = Math.random().toString(36).substring(2, 6);
@@ -253,6 +310,16 @@ export class P2PBusNetworkService {
   private currentRoomId: string | null = null;
   private selfUser: AuthUserDto | null = null;
   private discoveredRooms: Map<string, RoomSummaryDto> = new Map();
+  private blockedByPlayerId = new Map<string, Set<string>>();
+  private moderationReports: P2PModerationReport[] = [];
+  private lastChatSentAtByPlayer = new Map<string, number>();
+  private friendRequestsByTarget = new Map<string, Set<string>>();
+  private friendsByPlayer = new Map<string, Set<string>>();
+  private matchmakingOptIns = new Set<string>();
+  private pendingMatches = new Map<
+    string,
+    { firstPlayerId: string; secondPlayerId: string; acceptedBy: Set<string> }
+  >();
 
   constructor() {
     this.seedDefaultAccountsAndRooms();
@@ -413,6 +480,9 @@ export class P2PBusNetworkService {
         avatar: existing.avatar,
         shirtColor: existing.shirtColor,
         walletBalance: existing.walletBalance,
+        bio: existing.bio,
+        interests: existing.interests,
+        profileVisibility: existing.profileVisibility,
       };
       this.selfUser = sessionUser;
       return { user: sessionUser };
@@ -438,6 +508,9 @@ export class P2PBusNetworkService {
         avatar: dto.avatar || '🧑‍🚀',
         shirtColor: dto.shirtColor || '#f59e0b',
         walletBalance: 500000,
+        bio: dto.bio?.trim().slice(0, 160) ?? '',
+        interests: (dto.interests ?? []).slice(0, 8),
+        profileVisibility: dto.profileVisibility ?? 'public',
         passwordHash: dto.password || '123456',
       };
 
@@ -463,6 +536,34 @@ export class P2PBusNetworkService {
       type: 'DISCOVER_ROOMS_REQ',
     });
     return Array.from(this.discoveredRooms.values());
+  }
+
+  public updateLocalProfile(user: AuthUserDto): void {
+    this.selfUser = user;
+    try {
+      const raw = localStorage.getItem(ACCOUNTS_STORAGE_KEY);
+      const accounts: Record<string, StoredAccount> = raw ? JSON.parse(raw) : {};
+      const key = user.username.toLowerCase();
+      const existing = accounts[key];
+      if (!existing) return;
+      accounts[key] = {
+        ...existing,
+        ...user,
+        id: existing.id,
+        passwordHash: existing.passwordHash,
+      };
+      localStorage.setItem(ACCOUNTS_STORAGE_KEY, JSON.stringify(accounts));
+    } catch {
+      // Keep active profile state when local storage is unavailable.
+    }
+  }
+
+  public resolveModerationReport(reportId: string): void {
+    if (!this.isHosting) return;
+    this.moderationReports = this.moderationReports.filter(
+      (report) => report.id !== reportId
+    );
+    this.callbacks?.onModerationReports([...this.moderationReports]);
   }
 
   // ==================== P2P ROOM CREATE & JOIN ====================
@@ -745,6 +846,12 @@ export class P2PBusNetworkService {
     this.isHosting = false;
     this.hostedRoom = null;
     this.currentRoomId = null;
+    this.moderationReports = [];
+    this.friendRequestsByTarget.clear();
+    this.friendsByPlayer.clear();
+    this.matchmakingOptIns.clear();
+    this.pendingMatches.clear();
+    this.lastChatSentAtByPlayer.clear();
   }
 
   // ==================== CLIENT -> HOST ACTIONS ====================
@@ -760,7 +867,14 @@ export class P2PBusNetworkService {
       | 'MUSIC'
       | 'ROLE'
       | 'DISEMBARK'
-      | 'RETURN_TO_BUS',
+      | 'RETURN_TO_BUS'
+      | 'BLOCK'
+      | 'UNBLOCK'
+      | 'REPORT'
+      | 'MATCHMAKING'
+      | 'FRIEND_REQUEST'
+      | 'FRIEND_RESPONSE'
+      | 'PROFILE',
     payload: unknown
   ): void {
     if (!this.currentRoomId || !this.selfUser) return;
@@ -778,6 +892,25 @@ export class P2PBusNetworkService {
       actionType,
       payload,
     };
+    if (
+      actionType === 'CHAT' &&
+      typeof payload === 'object' &&
+      payload !== null &&
+      'recipientId' in payload &&
+      typeof payload.recipientId === 'string' &&
+      payload.recipientId.length > 0
+    ) {
+      if (this.hostConnection?.open) {
+        try {
+          this.hostConnection.send(pkt);
+        } catch {
+          this.callbacks?.onErrorToast('Không gửi được private chat qua kết nối P2P.');
+        }
+      } else {
+        this.callbacks?.onErrorToast('Private chat chưa có kết nối trực tiếp tới host.');
+      }
+      return;
+    }
     this.sendToHost(pkt);
   }
 
@@ -805,6 +938,22 @@ export class P2PBusNetworkService {
       }
     }
     this.sendBroadcast(pkt);
+  }
+
+  private sendFromHostToPlayer(playerId: string, pkt: P2PPacket): void {
+    for (const [peerId, conn] of this.clientConnections.entries()) {
+      if (
+        this.peerIdToPlayerId.get(peerId) !== playerId ||
+        !conn.open
+      ) {
+        continue;
+      }
+      try {
+        conn.send(pkt);
+      } catch {
+        // A disconnected recipient will not receive this private message.
+      }
+    }
   }
 
   private sendBroadcast(pkt: P2PPacket): void {
@@ -840,6 +989,23 @@ export class P2PBusNetworkService {
     if (this.isHosting && this.hostedRoom && pkt.roomId === this.hostedRoom.roomId) {
       if (pkt.type === 'CLIENT_JOIN_REQ') {
         const added = this.addOrUpdatePlayerInHostedRoom(this.hostedRoom, pkt.user);
+        const pendingRequests = this.friendRequestsByTarget.get(added.playerId);
+        for (const requesterId of pendingRequests ?? []) {
+          const requester = this.hostedRoom.players[requesterId];
+          if (!requester) continue;
+          const friendPacket: P2PPacket = {
+            id: makePacketId(),
+            type: 'HOST_FRIEND_REQUEST',
+            roomId: this.hostedRoom.roomId,
+            requesterId,
+            requesterName: requester.displayName,
+          };
+          if (added.playerId === this.selfUser?.id) {
+            this.callbacks?.onFriendRequest(requesterId, requester.displayName);
+          } else {
+            this.sendFromHostToPlayer(added.playerId, friendPacket);
+          }
+        }
         this.saveRoomToCatalog(toSummary(this.hostedRoom));
         this.broadcastHostedRoomState(`${added.displayName} vừa lên xe qua P2P!`);
         return;
@@ -892,7 +1058,47 @@ export class P2PBusNetworkService {
       }
 
       if (pkt.type === 'HOST_CHAT_MSG') {
-        this.callbacks?.onChatMessage(pkt.message, pkt.room);
+        const msg = pkt.message;
+        if (
+          msg.scope !== 'PRIVATE' ||
+          msg.senderId === this.selfUser.id ||
+          msg.recipientId === this.selfUser.id
+        ) {
+          this.callbacks?.onChatMessage(msg, pkt.room);
+        }
+        return;
+      }
+
+      if (pkt.type === 'HOST_FRIEND_REQUEST') {
+        this.callbacks?.onFriendRequest(pkt.requesterId, pkt.requesterName);
+        return;
+      }
+
+      if (pkt.type === 'HOST_FRIEND_RESPONSE') {
+        this.callbacks?.onFriendResponse(pkt.responderId, pkt.accepted);
+        return;
+      }
+
+      if (pkt.type === 'HOST_MATCH_OFFER') {
+        this.callbacks?.onMatchOffer(
+          pkt.offerId,
+          pkt.otherPlayerId,
+          pkt.otherPlayerName
+        );
+        return;
+      }
+
+      if (pkt.type === 'HOST_MATCH_RESULT') {
+        this.callbacks?.onMatchResult(
+          pkt.offerId,
+          pkt.otherPlayerId,
+          pkt.accepted
+        );
+        return;
+      }
+
+      if (pkt.type === 'HOST_BLOCKED_STATE') {
+        this.callbacks?.onBlockedPlayers(pkt.playerIds);
         return;
       }
 
@@ -952,6 +1158,9 @@ export class P2PBusNetworkService {
       isDisembarked: false,
       connected: true,
       walletBalance: user.walletBalance,
+      bio: user.bio ?? '',
+      interests: user.interests ?? [],
+      profileVisibility: user.profileVisibility ?? 'public',
     };
 
     room.players[user.id] = playerState;
@@ -966,6 +1175,31 @@ export class P2PBusNetworkService {
 
     if (p.seatId && room.seats[p.seatId] === playerId) {
       room.seats[p.seatId] = null;
+    }
+    this.matchmakingOptIns.delete(playerId);
+    this.friendRequestsByTarget.delete(playerId);
+    for (const requesterIds of this.friendRequestsByTarget.values()) {
+      requesterIds.delete(playerId);
+    }
+    for (const [offerId, match] of this.pendingMatches.entries()) {
+      if (![match.firstPlayerId, match.secondPlayerId].includes(playerId)) continue;
+      const remainingPlayerId = match.firstPlayerId === playerId
+        ? match.secondPlayerId
+        : match.firstPlayerId;
+      this.pendingMatches.delete(offerId);
+      const resultPacket: P2PPacket = {
+        id: makePacketId(),
+        type: 'HOST_MATCH_RESULT',
+        roomId: room.roomId,
+        offerId,
+        otherPlayerId: playerId,
+        accepted: false,
+      };
+      if (remainingPlayerId === this.selfUser?.id) {
+        this.callbacks?.onMatchResult(offerId, playerId, false);
+      } else {
+        this.sendFromHostToPlayer(remainingPlayerId, resultPacket);
+      }
     }
     delete room.players[playerId];
 
@@ -984,7 +1218,7 @@ export class P2PBusNetworkService {
 
   private broadcastHostedRoomState(toastMessage?: string): void {
     if (!this.hostedRoom || !this.selfUser) return;
-    const snapshot = structuredClone(this.hostedRoom);
+    const snapshot = this.createRoomSnapshot(this.hostedRoom);
 
     this.callbacks?.onRoomStateUpdated(snapshot, toastMessage);
     const selfPlayer = snapshot.players[this.selfUser.id];
@@ -1001,6 +1235,17 @@ export class P2PBusNetworkService {
     });
   }
 
+  private createRoomSnapshot(room: RoomFullStateDto): RoomFullStateDto {
+    const snapshot = structuredClone(room);
+    for (const player of Object.values(snapshot.players)) {
+      if (player.profileVisibility === 'private') {
+        player.bio = '';
+        player.interests = [];
+      }
+    }
+    return snapshot;
+  }
+
   private processHostAction(
     playerId: string,
     actionType:
@@ -1014,7 +1259,14 @@ export class P2PBusNetworkService {
       | 'MUSIC'
       | 'ROLE'
       | 'DISEMBARK'
-      | 'RETURN_TO_BUS',
+      | 'RETURN_TO_BUS'
+      | 'BLOCK'
+      | 'UNBLOCK'
+      | 'REPORT'
+      | 'MATCHMAKING'
+      | 'FRIEND_REQUEST'
+      | 'FRIEND_RESPONSE'
+      | 'PROFILE',
     rawPayload: unknown
   ): void {
     const room = this.hostedRoom;
@@ -1160,6 +1412,13 @@ export class P2PBusNetworkService {
 
       case 'CHAT': {
         const payload = rawPayload as SendChatPayload;
+        const now = Date.now();
+        const lastSentAt = this.lastChatSentAtByPlayer.get(playerId) ?? 0;
+        if (now - lastSentAt < SERVER_CABIN_BOUNDS.chatCooldownMs) {
+          this.sendErrorToPlayer(playerId, 'Đợi một chút trước khi gửi tin nhắn tiếp theo.');
+          return;
+        }
+        this.lastChatSentAtByPlayer.set(playerId, now);
         const content = payload.content
           .trim()
           .slice(0, SERVER_CABIN_BOUNDS.maxChatLength);
@@ -1168,6 +1427,22 @@ export class P2PBusNetworkService {
         const recipient = payload.recipientId
           ? room.players[payload.recipientId]
           : null;
+        const senderBlocks = this.blockedByPlayerId.get(playerId);
+        const recipientBlocks = payload.recipientId
+          ? this.blockedByPlayerId.get(payload.recipientId)
+          : undefined;
+        if (
+          recipient &&
+          (senderBlocks?.has(recipient.playerId) ||
+            recipientBlocks?.has(playerId))
+        ) {
+          this.sendErrorToPlayer(playerId, 'Tin nhắn riêng không được gửi vì có người đã chặn liên hệ.');
+          return;
+        }
+        if (payload.recipientId && !recipient) {
+          this.sendErrorToPlayer(playerId, 'Người nhận tin nhắn riêng không còn ở trong phòng.');
+          return;
+        }
 
         const msg: ChatMessageDto = {
           id: `chat-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
@@ -1183,16 +1458,265 @@ export class P2PBusNetworkService {
           createdAt: new Date().toISOString(),
         };
 
-        room.chatHistory = [...room.chatHistory.slice(-59), msg];
-        const snapshot = structuredClone(room);
-        this.callbacks?.onChatMessage(msg, snapshot);
-        this.sendFromHostToAllPeers({
+        if (recipient) {
+          for (const targetId of [playerId, recipient.playerId]) {
+            const packet: P2PPacket = {
+              id: makePacketId(),
+              type: 'HOST_CHAT_MSG',
+              roomId: room.roomId,
+              message: msg,
+            };
+            if (targetId === this.selfUser?.id) {
+              this.callbacks?.onChatMessage(msg);
+            } else {
+              this.sendFromHostToPlayer(targetId, packet);
+            }
+          }
+        } else {
+          room.chatHistory = [...room.chatHistory.slice(-59), msg];
+          const snapshot = this.createRoomSnapshot(room);
+          this.callbacks?.onChatMessage(msg, snapshot);
+          this.sendFromHostToAllPeers({
+            id: makePacketId(),
+            type: 'HOST_CHAT_MSG',
+            roomId: room.roomId,
+            message: msg,
+            room: snapshot,
+          });
+        }
+        break;
+      }
+
+      case 'BLOCK':
+      case 'UNBLOCK': {
+        const payload = rawPayload as { targetId?: string };
+        const targetId = payload.targetId;
+        if (!targetId || targetId === playerId || !room.players[targetId]) return;
+        const blocked = this.blockedByPlayerId.get(playerId) ?? new Set<string>();
+        if (actionType === 'BLOCK') blocked.add(targetId);
+        else blocked.delete(targetId);
+        this.blockedByPlayerId.set(playerId, blocked);
+        const blockedIds = Array.from(blocked);
+        if (this.selfUser?.id === playerId) {
+          this.callbacks?.onBlockedPlayers(blockedIds);
+        } else {
+          this.sendFromHostToPlayer(playerId, {
+            id: makePacketId(),
+            type: 'HOST_BLOCKED_STATE',
+            roomId: room.roomId,
+            playerIds: blockedIds,
+          });
+        }
+        this.sendErrorToPlayer(
+          playerId,
+          actionType === 'BLOCK'
+            ? 'Người chơi đã bị chặn. Tin nhắn riêng và lời mời từ hai phía sẽ bị từ chối.'
+            : 'Đã bỏ chặn người chơi.'
+        );
+        break;
+      }
+
+      case 'REPORT': {
+        const payload = rawPayload as { targetId?: string; reason?: string };
+        if (!payload.targetId || !room.players[payload.targetId]) return;
+        const reason = (payload.reason ?? 'other').slice(0, 80);
+        this.moderationReports.push({
           id: makePacketId(),
-          type: 'HOST_CHAT_MSG',
-          roomId: room.roomId,
-          message: msg,
-          room: snapshot,
+          reporterId: playerId,
+          targetId: payload.targetId,
+          reason,
+          createdAt: new Date().toISOString(),
         });
+        if (this.moderationReports.length > 500) this.moderationReports.shift();
+        this.callbacks?.onModerationReports([...this.moderationReports]);
+        this.sendErrorToPlayer(
+          playerId,
+          'Đã ghi nhận báo cáo trong phiên host hiện tại. Không đính kèm nội dung chat riêng.'
+        );
+        break;
+      }
+
+      case 'FRIEND_REQUEST': {
+        const payload = rawPayload as { targetId?: string };
+        const targetId = payload.targetId;
+        if (!targetId || targetId === playerId || !room.players[targetId]) return;
+        if (
+          this.blockedByPlayerId.get(playerId)?.has(targetId) ||
+          this.blockedByPlayerId.get(targetId)?.has(playerId)
+        ) {
+          this.sendErrorToPlayer(playerId, 'Lời mời không thể gửi vì có người đã chặn liên hệ.');
+          return;
+        }
+        if (this.friendsByPlayer.get(playerId)?.has(targetId)) {
+          this.sendErrorToPlayer(playerId, 'Hai bạn đã là bạn trong phòng này.');
+          return;
+        }
+        const pending = this.friendRequestsByTarget.get(targetId) ?? new Set<string>();
+        pending.add(playerId);
+        this.friendRequestsByTarget.set(targetId, pending);
+        const packet: P2PPacket = {
+          id: makePacketId(),
+          type: 'HOST_FRIEND_REQUEST',
+          roomId: room.roomId,
+          requesterId: playerId,
+          requesterName: player.displayName,
+        };
+        if (targetId === this.selfUser?.id) {
+          this.callbacks?.onFriendRequest(playerId, player.displayName);
+        } else {
+          this.sendFromHostToPlayer(targetId, packet);
+        }
+        this.sendErrorToPlayer(playerId, `Đã gửi lời mời kết bạn tới ${room.players[targetId].displayName}.`);
+        break;
+      }
+
+      case 'FRIEND_RESPONSE': {
+        const payload = rawPayload as { requesterId?: string; accepted?: boolean };
+        const requesterId = payload.requesterId;
+        if (
+          !requesterId ||
+          !room.players[requesterId] ||
+          !this.friendRequestsByTarget.get(playerId)?.has(requesterId)
+        ) {
+          return;
+        }
+        this.friendRequestsByTarget.get(playerId)?.delete(requesterId);
+        const accepted = payload.accepted === true;
+        if (accepted) {
+          const targetFriends = this.friendsByPlayer.get(playerId) ?? new Set<string>();
+          const requesterFriends = this.friendsByPlayer.get(requesterId) ?? new Set<string>();
+          targetFriends.add(requesterId);
+          requesterFriends.add(playerId);
+          this.friendsByPlayer.set(playerId, targetFriends);
+          this.friendsByPlayer.set(requesterId, requesterFriends);
+        }
+        for (const targetId of [requesterId, playerId]) {
+          const counterpart = targetId === requesterId ? playerId : requesterId;
+          const response: P2PPacket = {
+            id: makePacketId(),
+            type: 'HOST_FRIEND_RESPONSE',
+            roomId: room.roomId,
+            responderId: counterpart,
+            accepted,
+          };
+          if (targetId === this.selfUser?.id) {
+            this.callbacks?.onFriendResponse(counterpart, accepted);
+          } else {
+            this.sendFromHostToPlayer(targetId, response);
+          }
+        }
+        this.sendErrorToPlayer(
+          playerId,
+          accepted ? 'Lời mời kết bạn đã được chấp nhận.' : 'Đã từ chối lời mời kết bạn.'
+        );
+        break;
+      }
+
+      case 'MATCHMAKING': {
+        const payload = rawPayload as {
+          enabled?: boolean;
+          offerId?: string;
+          accepted?: boolean;
+        };
+        if (payload.offerId) {
+          const match = this.pendingMatches.get(payload.offerId);
+          if (!match || ![match.firstPlayerId, match.secondPlayerId].includes(playerId)) return;
+          if (payload.accepted !== true) {
+            this.pendingMatches.delete(payload.offerId);
+            for (const targetId of [match.firstPlayerId, match.secondPlayerId]) {
+              const counterpart = targetId === match.firstPlayerId
+                ? match.secondPlayerId
+                : match.firstPlayerId;
+              const packet: P2PPacket = {
+                id: makePacketId(),
+                type: 'HOST_MATCH_RESULT',
+                roomId: room.roomId,
+                offerId: payload.offerId,
+                otherPlayerId: counterpart,
+                accepted: false,
+              };
+              if (targetId === this.selfUser?.id) {
+                this.callbacks?.onMatchResult(payload.offerId, counterpart, false);
+              } else {
+                this.sendFromHostToPlayer(targetId, packet);
+              }
+            }
+            return;
+          }
+          match.acceptedBy.add(playerId);
+          if (match.acceptedBy.size === 2) {
+            this.pendingMatches.delete(payload.offerId);
+            for (const targetId of [match.firstPlayerId, match.secondPlayerId]) {
+              const counterpart = targetId === match.firstPlayerId
+                ? match.secondPlayerId
+                : match.firstPlayerId;
+              const packet: P2PPacket = {
+                id: makePacketId(),
+                type: 'HOST_MATCH_RESULT',
+                roomId: room.roomId,
+                offerId: payload.offerId,
+                otherPlayerId: counterpart,
+                accepted: true,
+              };
+              if (targetId === this.selfUser?.id) {
+                this.callbacks?.onMatchResult(payload.offerId, counterpart, true);
+              } else {
+                this.sendFromHostToPlayer(targetId, packet);
+              }
+            }
+          }
+          break;
+        }
+
+        if (payload.enabled !== true) {
+          this.matchmakingOptIns.delete(playerId);
+          this.sendErrorToPlayer(playerId, 'Đã tắt tìm bạn đồng hành.');
+          break;
+        }
+
+        const candidateId = Array.from(this.matchmakingOptIns).find(
+          (candidate) =>
+            candidate !== playerId &&
+            room.players[candidate]?.connected &&
+            !this.blockedByPlayerId.get(playerId)?.has(candidate) &&
+            !this.blockedByPlayerId.get(candidate)?.has(playerId)
+        );
+        if (!candidateId) {
+          this.matchmakingOptIns.add(playerId);
+          this.sendErrorToPlayer(playerId, 'Đã bật tìm bạn. Đang chờ người chơi khác chủ động tham gia.');
+          break;
+        }
+
+        const offerId = `match-${makePacketId()}`;
+        this.matchmakingOptIns.delete(candidateId);
+        const match = {
+          firstPlayerId: candidateId,
+          secondPlayerId: playerId,
+          acceptedBy: new Set<string>(),
+        };
+        this.pendingMatches.set(offerId, match);
+        for (const [targetId, otherId] of [
+          [candidateId, playerId],
+          [playerId, candidateId],
+        ]) {
+          const packet: P2PPacket = {
+            id: makePacketId(),
+            type: 'HOST_MATCH_OFFER',
+            roomId: room.roomId,
+            offerId,
+            otherPlayerId: otherId,
+            otherPlayerName: room.players[otherId].displayName,
+          };
+          if (targetId === this.selfUser?.id) {
+            this.callbacks?.onMatchOffer(
+              offerId,
+              otherId,
+              room.players[otherId].displayName
+            );
+          } else {
+            this.sendFromHostToPlayer(targetId, packet);
+          }
+        }
         break;
       }
 
@@ -1379,8 +1903,16 @@ export class P2PBusNetworkService {
 
       case 'ROLE': {
         const payload = rawPayload as AssignRolePayload;
+        if (playerId !== room.ownerId) {
+          this.sendErrorToPlayer(playerId, 'Chỉ chủ phòng mới được đổi vai trò.');
+          return;
+        }
         const target = room.players[payload.targetPlayerId];
         if (!target) return;
+        if (target.playerId === room.ownerId && payload.role !== 'OWNER') {
+          this.sendErrorToPlayer(playerId, 'Không thể hạ vai trò của chủ phòng hiện tại.');
+          return;
+        }
 
         target.role = payload.role;
         if (payload.role === 'DRIVER') {
@@ -1395,6 +1927,27 @@ export class P2PBusNetworkService {
         this.broadcastHostedRoomState(
           `${target.displayName} đã nhận vai trò ${payload.role}!`
         );
+        break;
+      }
+
+      case 'PROFILE': {
+        const payload = rawPayload as {
+          bio?: string;
+          interests?: string[];
+          profileVisibility?: 'public' | 'private';
+        };
+        player.bio = (payload.bio ?? '').trim().slice(0, 160);
+        player.interests = Array.isArray(payload.interests)
+          ? payload.interests
+              .filter((item): item is string => typeof item === 'string')
+              .map((item) => item.trim().slice(0, 32))
+              .filter(Boolean)
+              .slice(0, 8)
+          : [];
+        player.profileVisibility = payload.profileVisibility === 'private'
+          ? 'private'
+          : 'public';
+        this.broadcastHostedRoomState(`${player.displayName} đã cập nhật hồ sơ.`);
         break;
       }
     }

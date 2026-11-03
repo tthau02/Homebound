@@ -26,6 +26,7 @@ import { useGameStore } from './useGameStore';
 import { useInteractionStore } from './useInteractionStore';
 import { musicAudioEngine } from '../services/musicAudioEngine';
 import { p2pBusNetwork } from '../services/p2pBusNetwork';
+import type { P2PModerationReport } from '../services/p2pBusNetwork';
 import { CharacterData } from '../game/character/characterTypes';
 import { SeatData } from '../game/seat/seatTypes';
 
@@ -44,6 +45,17 @@ interface MultiplayerStoreState {
   routes: BusRouteDto[];
   rooms: RoomSummaryDto[];
   currentRoom: RoomFullStateDto | null;
+  privateChatMessages: ChatMessageDto[];
+  blockedPlayerIds: string[];
+  friends: string[];
+  incomingFriendRequests: Array<{ playerId: string; displayName: string }>;
+  incomingMatchOffers: Array<{
+    offerId: string;
+    playerId: string;
+    displayName: string;
+  }>;
+  matchmakingEnabled: boolean;
+  moderationReports: P2PModerationReport[];
   privateChatTargetId: string | null;
 
   setLobbyModalOpen: (open: boolean) => void;
@@ -69,6 +81,19 @@ interface MultiplayerStoreState {
   emitStand: () => void;
   emitDisembark: () => void;
   emitReturnToBus: () => void;
+  emitBlockPlayer: (targetId: string) => void;
+  emitUnblockPlayer: (targetId: string) => void;
+  emitReportPlayer: (targetId: string, reason: string) => void;
+  emitFriendRequest: (targetId: string) => void;
+  emitFriendResponse: (requesterId: string, accepted: boolean) => void;
+  setMatchmakingEnabled: (enabled: boolean) => void;
+  emitMatchResponse: (offerId: string, accepted: boolean) => void;
+  updateProfile: (profile: {
+    bio: string;
+    interests: string[];
+    profileVisibility: 'public' | 'private';
+  }) => void;
+  resolveModerationReport: (reportId: string) => void;
   emitEmote: (emote: SharedEmoteType) => void;
   emitChatMessage: (content: string, recipientId?: string | null) => void;
   emitJourneyControl: (
@@ -126,6 +151,49 @@ function restoreOfflineScene(): void {
   });
 }
 
+function getStoredBlockedPlayers(userId: string): string[] {
+  try {
+    const saved = localStorage.getItem(`virtual_bus_p2p_blocks_${userId}`);
+    const parsed: unknown = saved ? JSON.parse(saved) : [];
+    return Array.isArray(parsed)
+      ? parsed.filter((value): value is string => typeof value === 'string')
+      : [];
+  } catch {
+    return [];
+  }
+}
+
+function saveBlockedPlayers(userId: string, playerIds: string[]): void {
+  try {
+    localStorage.setItem(
+      `virtual_bus_p2p_blocks_${userId}`,
+      JSON.stringify(playerIds)
+    );
+  } catch {
+    // Keep the in-memory block list when browser storage is unavailable.
+  }
+}
+
+function getStoredFriends(userId: string): string[] {
+  try {
+    const saved = localStorage.getItem(`virtual_bus_p2p_friends_${userId}`);
+    const parsed: unknown = saved ? JSON.parse(saved) : [];
+    return Array.isArray(parsed)
+      ? parsed.filter((value): value is string => typeof value === 'string')
+      : [];
+  } catch {
+    return [];
+  }
+}
+
+function saveFriends(userId: string, playerIds: string[]): void {
+  try {
+    localStorage.setItem(`virtual_bus_p2p_friends_${userId}`, JSON.stringify(playerIds));
+  } catch {
+    // Keep current-session friend links if local storage is unavailable.
+  }
+}
+
 function mapMultiplayerPlayerToCharacterData(
   mp: MultiplayerPlayerState,
   isSelf: boolean,
@@ -155,7 +223,7 @@ function mapMultiplayerPlayerToCharacterData(
     pantsColor: '#1e293b',
     hairColor: '#18181b',
     hometown: roleLabelMap[mp.role],
-    bio: `Kết nối P2P (${mp.username}) • Vai trò: ${roleLabelMap[mp.role]}`,
+    bio: mp.bio || `Kết nối P2P (${mp.username}) • Vai trò: ${roleLabelMap[mp.role]}`,
     activityLabel:
       mp.state === 'sitting'
         ? `Đang ngồi ghế ${mp.seatId ?? ''}`
@@ -236,6 +304,7 @@ let lastMoveEmitMs = 0;
 
 p2pBusNetwork.setCallbacks({
   onRoomJoined: (room, selfPlayerId, isHost) => {
+    const blockedPlayerIds = useMultiplayerStore.getState().blockedPlayerIds;
     useMultiplayerStore.setState({
       currentRoom: room,
       isOnlineMode: true,
@@ -245,6 +314,9 @@ p2pBusNetwork.setCallbacks({
       isSocialPanelOpen: true,
     });
     syncRoomTo3DScene(room, selfPlayerId);
+    for (const targetId of blockedPlayerIds) {
+      if (room.players[targetId]) p2pBusNetwork.sendAction('BLOCK', { targetId });
+    }
     useInteractionStore
       .getState()
       .showStatusToast(
@@ -276,7 +348,16 @@ p2pBusNetwork.setCallbacks({
     useCharacterStore.getState().triggerCharacterEmote(playerId, emote);
   },
   onChatMessage: (message: ChatMessageDto, room) => {
-    useMultiplayerStore.setState({ currentRoom: room });
+    if (message.scope === 'PRIVATE') {
+      useMultiplayerStore.setState((state) => ({
+        privateChatMessages: [
+          ...state.privateChatMessages.filter((item) => item.id !== message.id),
+          message,
+        ].slice(-80),
+      }));
+    } else if (room) {
+      useMultiplayerStore.setState({ currentRoom: room });
+    }
     if (message.senderId !== 'system') {
       const prefix = message.scope === 'PRIVATE' ? '🔒 [Riêng] ' : '';
       useChatStore
@@ -296,6 +377,59 @@ p2pBusNetwork.setCallbacks({
     const user = useMultiplayerStore.getState().user;
     if (user)
       useMultiplayerStore.setState({ user: { ...user, walletBalance } });
+  },
+  onBlockedPlayers: (playerIds) => {
+    const userId = useMultiplayerStore.getState().user?.id;
+    if (userId) saveBlockedPlayers(userId, playerIds);
+    useMultiplayerStore.setState({ blockedPlayerIds: playerIds });
+  },
+  onFriendRequest: (requesterId, displayName) => {
+    useMultiplayerStore.setState((state) => ({
+      incomingFriendRequests: [
+        ...state.incomingFriendRequests.filter((request) => request.playerId !== requesterId),
+        { playerId: requesterId, displayName },
+      ],
+    }));
+  },
+  onFriendResponse: (playerId, accepted) => {
+    if (!accepted) return;
+    const userId = useMultiplayerStore.getState().user?.id;
+    if (!userId) return;
+    useMultiplayerStore.setState((state) => {
+      const friends = Array.from(new Set([...state.friends, playerId]));
+      saveFriends(userId, friends);
+      return {
+        friends,
+        incomingFriendRequests: state.incomingFriendRequests.filter(
+          (request) => request.playerId !== playerId
+        ),
+      };
+    });
+  },
+  onMatchOffer: (offerId, playerId, displayName) => {
+    useMultiplayerStore.setState((state) => ({
+      matchmakingEnabled: false,
+      incomingMatchOffers: [
+        ...state.incomingMatchOffers.filter((offer) => offer.offerId !== offerId),
+        { offerId, playerId, displayName },
+      ],
+    }));
+  },
+  onMatchResult: (offerId, playerId, accepted) => {
+    useMultiplayerStore.setState((state) => ({
+      incomingMatchOffers: state.incomingMatchOffers.filter(
+        (offer) => offer.offerId !== offerId
+      ),
+    }));
+    if (accepted) {
+      useMultiplayerStore.getState().setPrivateChatTargetId(playerId);
+      useInteractionStore.getState().showStatusToast('Cả hai đã đồng ý kết nối. Bạn có thể bắt đầu chat riêng.');
+    } else {
+      useInteractionStore.getState().showStatusToast('Lời mời kết nối đã kết thúc.');
+    }
+  },
+  onModerationReports: (reports) => {
+    useMultiplayerStore.setState({ moderationReports: reports });
   },
   onErrorToast: (message) =>
     useInteractionStore.getState().showStatusToast(message),
@@ -325,6 +459,13 @@ export const useMultiplayerStore = create<MultiplayerStoreState>((set, get) => (
   rooms: p2pBusNetwork.getDiscoveredRooms(),
   currentRoom: null,
   privateChatTargetId: null,
+  privateChatMessages: [],
+  blockedPlayerIds: [],
+  friends: [],
+  incomingFriendRequests: [],
+  incomingMatchOffers: [],
+  matchmakingEnabled: false,
+  moderationReports: [],
 
   setLobbyModalOpen: (open) => set({ isLobbyModalOpen: open }),
   setSocialPanelOpen: (open) => set({ isSocialPanelOpen: open }),
@@ -343,7 +484,16 @@ export const useMultiplayerStore = create<MultiplayerStoreState>((set, get) => (
       set({ authError: result.error ?? 'Đăng nhập thất bại.' });
       return false;
     }
-    set({ user: result.user, authError: null });
+    set({
+      user: result.user,
+      authError: null,
+      blockedPlayerIds: getStoredBlockedPlayers(result.user.id),
+      friends: getStoredFriends(result.user.id),
+      incomingFriendRequests: [],
+      incomingMatchOffers: [],
+      matchmakingEnabled: false,
+      moderationReports: [],
+    });
     await get().fetchRoomsAndRoutes();
     return true;
   },
@@ -354,7 +504,16 @@ export const useMultiplayerStore = create<MultiplayerStoreState>((set, get) => (
       set({ authError: result.error ?? 'Đăng ký thất bại.' });
       return false;
     }
-    set({ user: result.user, authError: null });
+    set({
+      user: result.user,
+      authError: null,
+      blockedPlayerIds: getStoredBlockedPlayers(result.user.id),
+      friends: getStoredFriends(result.user.id),
+      incomingFriendRequests: [],
+      incomingMatchOffers: [],
+      matchmakingEnabled: false,
+      moderationReports: [],
+    });
     await get().fetchRoomsAndRoutes();
     return true;
   },
@@ -370,6 +529,13 @@ export const useMultiplayerStore = create<MultiplayerStoreState>((set, get) => (
       user: null,
       accessToken: null,
       currentRoom: null,
+      privateChatMessages: [],
+      blockedPlayerIds: [],
+      friends: [],
+      incomingFriendRequests: [],
+      incomingMatchOffers: [],
+      matchmakingEnabled: false,
+      moderationReports: [],
       p2pStatusText: 'Chưa kết nối P2P',
       connectionLabel: 'Chưa kết nối P2P',
     });
@@ -402,6 +568,8 @@ export const useMultiplayerStore = create<MultiplayerStoreState>((set, get) => (
     restoreOfflineScene();
     set({
       currentRoom: null,
+  privateChatMessages: [],
+      incomingFriendRequests: [],
       isOnlineMode: false,
       isConnected: false,
       isHostPeer: false,
@@ -422,6 +590,49 @@ export const useMultiplayerStore = create<MultiplayerStoreState>((set, get) => (
   emitStand: () => p2pBusNetwork.sendAction('STAND', {}),
   emitDisembark: () => p2pBusNetwork.sendAction('DISEMBARK', {}),
   emitReturnToBus: () => p2pBusNetwork.sendAction('RETURN_TO_BUS', {}),
+  emitBlockPlayer: (targetId) =>
+    p2pBusNetwork.sendAction('BLOCK', { targetId }),
+  emitUnblockPlayer: (targetId) =>
+    p2pBusNetwork.sendAction('UNBLOCK', { targetId }),
+  emitReportPlayer: (targetId, reason) =>
+    p2pBusNetwork.sendAction('REPORT', { targetId, reason }),
+  emitFriendRequest: (targetId) =>
+    p2pBusNetwork.sendAction('FRIEND_REQUEST', { targetId }),
+  emitFriendResponse: (requesterId, accepted) => {
+    set((state) => ({
+      incomingFriendRequests: state.incomingFriendRequests.filter(
+        (request) => request.playerId !== requesterId
+      ),
+    }));
+    p2pBusNetwork.sendAction('FRIEND_RESPONSE', { requesterId, accepted });
+  },
+  setMatchmakingEnabled: (enabled) => {
+    set({ matchmakingEnabled: enabled });
+    p2pBusNetwork.sendAction('MATCHMAKING', { enabled });
+  },
+  emitMatchResponse: (offerId, accepted) =>
+    p2pBusNetwork.sendAction('MATCHMAKING', { offerId, accepted }),
+  updateProfile: (profile) => {
+    const user = get().user;
+    if (!user) return;
+    const nextUser = {
+      ...user,
+      bio: profile.bio.trim().slice(0, 160),
+      interests: profile.interests.slice(0, 8),
+      profileVisibility: profile.profileVisibility,
+    };
+    set({ user: nextUser });
+    p2pBusNetwork.updateLocalProfile(nextUser);
+    if (get().currentRoom) {
+      p2pBusNetwork.sendAction('PROFILE', {
+        bio: nextUser.bio,
+        interests: nextUser.interests,
+        profileVisibility: nextUser.profileVisibility,
+      });
+    }
+  },
+  resolveModerationReport: (reportId) =>
+    p2pBusNetwork.resolveModerationReport(reportId),
   emitEmote: (emote) => p2pBusNetwork.sendAction('EMOTE', { emote }),
   emitChatMessage: (content, recipientId = null) =>
     p2pBusNetwork.sendAction('CHAT', { content, recipientId }),

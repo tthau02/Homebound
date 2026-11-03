@@ -90,6 +90,9 @@ export interface AuthUserDto {
   avatar: string;
   shirtColor: string;
   walletBalance: number;
+  bio?: string;
+  interests?: string[];
+  profileVisibility?: 'public' | 'private';
 }
 
 export interface LoginRequestDto {
@@ -103,6 +106,9 @@ export interface RegisterRequestDto {
   displayName: string;
   avatar?: string;
   shirtColor?: string;
+  bio?: string;
+  interests?: string[];
+  profileVisibility?: 'public' | 'private';
 }
 
 export interface AuthResponseDto {
@@ -172,6 +178,9 @@ export interface MultiplayerPlayerState {
   isDisembarked: boolean;
   connected: boolean;
   walletBalance: number;
+  bio?: string;
+  interests?: string[];
+  profileVisibility?: 'public' | 'private';
 }
 
 export interface ChatMessageDto {
