@@ -68,7 +68,7 @@ Luồng:
 1. Người chơi bật “Tìm bạn đồng hành”.
 2. Chọn mục đích: trò chuyện, kết bạn, cùng chơi.
 3. Chọn sở thích chung và tùy chọn phù hợp.
-4. Server đưa vào hàng chờ.
+4. Host đưa người chơi vào hàng chờ của room.
 5. Ghép hai người thỏa điều kiện.
 6. Hiển thị lời mời; cả hai phải chấp nhận.
 7. Tạo phiên trò chuyện/phòng ghế cạnh nhau.
@@ -128,62 +128,40 @@ interface UserBlock {
 }
 ```
 
-Thiết kế schema thực tế cần unique constraints, indexes và kiểm tra quyền truy cập phía server.
+Trong bản frontend-only, profile cục bộ lưu trong localStorage; profile đặt private phải được host loại khỏi room snapshot. Block list lưu cục bộ và đồng bộ tới host khi người chơi vào room. Host chỉ giữ report metadata trong bộ nhớ của phiên.
 
-## 5. API và Socket events gợi ý
+## 5. P2P actions
 
-REST:
-- `GET/PATCH /profile`
-- `POST /friends/requests`
-- `POST /friends/requests/:id/accept`
-- `DELETE /friends/:userId`
-- `GET /friends`
-- `POST /users/:id/block`
-- `POST /reports`
+Các peer gửi action qua `CLIENT_ACTION`; host kiểm tra room membership, block list và trạng thái ghép cặp trước khi gửi kết quả tới các peer liên quan.
 
-Socket:
-- `private-chat:send`
-- `private-chat:message`
-- `matchmaking:join`
-- `matchmaking:leave`
-- `matchmaking:offer`
-- `matchmaking:accept`
-- `matchmaking:decline`
-- `social:invite`
-- `social:invite-response`
+- `PROFILE`: cập nhật bio, interests và visibility; host bỏ bio/interests khỏi snapshot khi profile đặt private.
+- `FRIEND_REQUEST` / `FRIEND_RESPONSE`: lời mời kết bạn trong room hiện tại, cả hai bên phải xác nhận.
+- `BLOCK` / `UNBLOCK`: host từ chối private chat và lời mời giữa hai bên đã block.
+- `REPORT`: lưu lý do và ID người báo cáo/đối tượng trong bộ nhớ host; không đính kèm nội dung private chat.
+- `CHAT`: public message gửi cả room; private message gửi riêng cho sender và recipient, không thêm vào room chat history.
+- `MATCHMAKING`: peer phải bật opt-in; host chỉ ghép hai người cùng room đã bật và cả hai phải accept.
 
-Server phải kiểm tra danh tính, block list, quyền truy cập hội thoại và trạng thái ghép cặp.
+Không dùng REST hoặc Socket.IO. Dữ liệu friend, block, report và matchmaking không có đồng bộ toàn cục giữa các room.
 
 ## 6. UI/UX
-- Profile drawer/page.
-- Friends panel.
+- Profile editor trong social hub.
+- Friend requests trong room.
 - Chat inbox.
 - Private chat window.
 - Matchmaking preferences.
 - Match found screen có Accept/Decline.
 - Block/Report menu dễ tìm.
 - Privacy settings.
-- Safety center và quy tắc cộng đồng.
+- Report queue chỉ có trên host trong phiên hiện tại.
 
 ## 7. Cấu trúc code gợi ý
 
 ```text
-apps/
-  web/src/features/
-    profile/
-    friends/
-    private-chat/
-    matchmaking/
-    social-invites/
-    safety/
-  server/src/
-    profiles/
-    friends/
-    conversations/
-    matchmaking/
-    blocks/
-    reports/
-    moderation/
+src/
+  components/hud/MultiplayerSocialHub.tsx
+  services/p2pBusNetwork.ts
+  stores/useMultiplayerStore.ts
+packages/shared/src/index.ts
 ```
 
 ## 8. Thứ tự triển khai
@@ -201,25 +179,26 @@ apps/
 
 ## 9. Tiêu chí nghiệm thu
 
-- [ ] Người chơi sửa hồ sơ và quyền hiển thị.
-- [ ] Gửi/chấp nhận/từ chối lời mời kết bạn.
-- [ ] Chat riêng chỉ người có quyền truy cập xem được.
-- [ ] Ghép cặp chỉ chạy khi người chơi chủ động bật.
-- [ ] Cả hai bên phải chấp nhận lời mời ghép.
-- [ ] Có thể từ chối/rời ghép cặp bất cứ lúc nào.
-- [ ] Block ngăn chat và lời mời theo đúng chính sách.
-- [ ] Có mute và report.
-- [ ] Có rate limit và chống spam cơ bản.
-- [ ] Moderator có thể xử lý report và có audit log.
-- [ ] Không lộ dữ liệu cá nhân không cần thiết.
+- [x] Người chơi sửa bio, sở thích và quyền hiển thị public/private.
+- [x] Gửi/chấp nhận/từ chối lời mời kết bạn trong room.
+- [x] Private chat chỉ gửi qua kết nối host tới sender/recipient, không vào room history.
+- [x] Ghép cặp chỉ chạy khi người chơi chủ động bật.
+- [x] Cả hai bên phải chấp nhận lời mời ghép.
+- [x] Có thể từ chối lời mời; có thể tắt opt-in khi đang chờ.
+- [x] Block ngăn private chat, lời mời kết bạn và matchmaking.
+- [x] Có block/mute local, report metadata và giới hạn tần suất chat.
+- [ ] Moderator có thể xử lý report và có audit log đầy đủ.
+- [x] Snapshot không phát bio/sở thích của profile private; private chat không nằm trong room snapshot.
 - [ ] Có kiểm thử quyền riêng tư và phân quyền.
+
+Giới hạn của bản P2P: friend requests và matchmaking chỉ hoạt động khi hai người cùng room; report queue mất khi host rời; không có age-gate, audit log lâu dài hay kiểm duyệt xuyên room. Đây là social MVP cho prototype, chưa bao gồm vận hành dating/public community.
 
 ## 10. Prompt giao cho AI code
 
 Hãy triển khai Phase 5 của Roadmate dựa trên tài liệu này và codebase Phase 1–4 hiện tại. Trước khi code, kiểm tra mô hình User, PlayerProfile, Room, Chat và các module đã tồn tại; tái sử dụng thay vì tạo bản sao.
 
-Ưu tiên privacy, consent và safety. Xây profile, friends, block/report trước; sau đó private chat; cuối cùng mới matchmaking opt-in. Mọi quyền truy cập phải được xác thực ở backend, không tin trạng thái do client gửi.
+Ưu tiên privacy, consent và safety trong kiến trúc frontend-only. Dùng host peer làm nguồn chuẩn trong room. Không thêm backend hay Socket.IO. Private message chỉ gửi cho hai bên; block phải được host áp dụng; matchmaking chỉ chạy khi cả hai tự opt-in và accept. Báo cáo chỉ giữ metadata trong phiên host và không chuyển private chat content.
 
 Không ghép cặp người dùng nếu họ chưa bật tìm bạn. Hai bên phải xác nhận trước khi tạo kết nối. Thêm test cho block, quyền xem hội thoại, spam và trường hợp disconnect.
 
-Triển khai từng module, chạy migration, typecheck, test và build. Không đánh dấu hoàn thành nếu chưa kiểm thử. Cập nhật README, API/event documentation và báo cáo phần còn thiếu.
+Triển khai từng module, chạy typecheck và build. Không thêm backend/migration. Cập nhật README, P2P action documentation và báo cáo rõ giới hạn về host trust, persistence, age-gating, moderation và kiểm thử.

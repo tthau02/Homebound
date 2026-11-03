@@ -8,6 +8,8 @@ Trò chơi mô phỏng xe khách đường dài 3D trên trình duyệt. Toàn b
 - Cảnh đường quê Việt Nam chuyển động, ngày/đêm, chất lượng đồ họa.
 - Hai tuyến mẫu: TP.HCM–Cần Thơ và TP.HCM–Đà Lạt, có danh sách trạm.
 - Phòng multiplayer P2P, đồng bộ nhân vật/ghế/chat/chuyến xe/nhạc.
+- Hồ sơ người chơi với giới thiệu/sở thích và tùy chọn ẩn, lời mời kết bạn trong room.
+- Private chat gửi riêng cho hai bên, block/report, và matchmaking opt-in yêu cầu cả hai chấp nhận.
 - Tại trạm: hành khách có thể xuống xe, đi bộ trong khu vực giới hạn, check-in ở khung ảnh và quay lại xe.
 - Host P2P quản lý trạng thái phòng, điểm dừng, thời tiết và các thao tác multiplayer.
 
@@ -41,3 +43,5 @@ npm run build
 Một peer giữ vai trò host và xử lý trạng thái chuyến xe; các peer khác gửi thao tác và nhận state snapshot. PeerJS cung cấp signaling để thiết lập kết nối WebRTC, còn BroadcastChannel hỗ trợ các tab cùng trình duyệt. Mã phòng cần được chia sẻ trực tiếp để người chơi ở thiết bị khác tham gia.
 
 Tài khoản demo được tạo trong localStorage của trình duyệt. Dữ liệu tài khoản và phòng không phải dịch vụ tài khoản hay lưu trữ dùng chung giữa các thiết bị; trạng thái authoritative của room nằm trên peer host đang chạy.
+
+Bạn bè, block và hồ sơ lưu ở localStorage theo tài khoản trình duyệt. Lời mời kết bạn và matchmaking chỉ hoạt động giữa người cùng room; report metadata chỉ tồn tại trong bộ nhớ host của phiên hiện tại. Host rời phòng sẽ kết thúc room và các lời mời đang chờ.

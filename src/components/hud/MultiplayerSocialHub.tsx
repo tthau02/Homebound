@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   Check,
   CheckCircle2,
@@ -23,6 +23,28 @@ export const MultiplayerSocialHub: React.FC = () => {
   const isOnlineMode = useMultiplayerStore((state) => state.isOnlineMode);
   const isHostPeer = useMultiplayerStore((state) => state.isHostPeer);
   const currentRoom = useMultiplayerStore((state) => state.currentRoom);
+  const privateChatMessages = useMultiplayerStore(
+    (state) => state.privateChatMessages
+  );
+  const blockedPlayerIds = useMultiplayerStore(
+    (state) => state.blockedPlayerIds
+  );
+  const friends = useMultiplayerStore((state) => state.friends);
+  const incomingFriendRequests = useMultiplayerStore(
+    (state) => state.incomingFriendRequests
+  );
+  const incomingMatchOffers = useMultiplayerStore(
+    (state) => state.incomingMatchOffers
+  );
+  const moderationReports = useMultiplayerStore(
+    (state) => state.moderationReports
+  );
+  const resolveModerationReport = useMultiplayerStore(
+    (state) => state.resolveModerationReport
+  );
+  const matchmakingEnabled = useMultiplayerStore(
+    (state) => state.matchmakingEnabled
+  );
   const user = useMultiplayerStore((state) => state.user);
   const isSocialPanelOpen = useMultiplayerStore(
     (state) => state.isSocialPanelOpen
@@ -53,6 +75,18 @@ export const MultiplayerSocialHub: React.FC = () => {
   const emitRoleAssign = useMultiplayerStore((state) => state.emitRoleAssign);
   const emitDisembark = useMultiplayerStore((state) => state.emitDisembark);
   const emitReturnToBus = useMultiplayerStore((state) => state.emitReturnToBus);
+  const emitBlockPlayer = useMultiplayerStore((state) => state.emitBlockPlayer);
+  const emitUnblockPlayer = useMultiplayerStore((state) => state.emitUnblockPlayer);
+  const emitReportPlayer = useMultiplayerStore((state) => state.emitReportPlayer);
+  const emitFriendRequest = useMultiplayerStore((state) => state.emitFriendRequest);
+  const emitFriendResponse = useMultiplayerStore((state) => state.emitFriendResponse);
+  const setMatchmakingEnabled = useMultiplayerStore(
+    (state) => state.setMatchmakingEnabled
+  );
+  const emitMatchResponse = useMultiplayerStore(
+    (state) => state.emitMatchResponse
+  );
+  const updateProfile = useMultiplayerStore((state) => state.updateProfile);
   const leaveCurrentRoom = useMultiplayerStore(
     (state) => state.leaveCurrentRoom
   );
@@ -60,6 +94,16 @@ export const MultiplayerSocialHub: React.FC = () => {
   const [chatText, setChatText] = useState('');
   const [announcementInput, setAnnouncementInput] = useState('');
   const [copiedRoomCode, setCopiedRoomCode] = useState(false);
+  const [reportReason, setReportReason] = useState('harassment');
+  const [profileBio, setProfileBio] = useState('');
+  const [profileInterests, setProfileInterests] = useState('');
+  const [profileVisibility, setProfileVisibility] = useState<'public' | 'private'>('public');
+
+  useEffect(() => {
+    setProfileBio(user?.bio ?? '');
+    setProfileInterests(user?.interests?.join(', ') ?? '');
+    setProfileVisibility(user?.profileVisibility ?? 'public');
+  }, [user?.id, user?.bio, user?.interests, user?.profileVisibility]);
 
   if (!isOnlineMode || !currentRoom || !user) return null;
 
@@ -75,6 +119,24 @@ export const MultiplayerSocialHub: React.FC = () => {
     ] ?? DEFAULT_MUSIC_TRACKS[0];
 
   const myTicket = currentRoom.tickets[user.id];
+  const visiblePrivateMessages = privateChatTargetId
+    ? privateChatMessages.filter(
+        (message) =>
+          (message.senderId === user.id &&
+            message.recipientId === privateChatTargetId) ||
+          (message.senderId === privateChatTargetId &&
+            message.recipientId === user.id)
+      )
+    : [];
+  const visibleChatMessages = [
+    ...currentRoom.chatHistory.filter(
+      (message) =>
+        message.scope !== 'PRIVATE' &&
+        (message.scope === 'SYSTEM' ||
+          !blockedPlayerIds.includes(message.senderId))
+    ),
+    ...visiblePrivateMessages,
+  ].sort((left, right) => left.createdAt.localeCompare(right.createdAt));
 
   const handleCopyRoomCode = () => {
     navigator.clipboard?.writeText(currentRoom.roomId);
@@ -94,6 +156,19 @@ export const MultiplayerSocialHub: React.FC = () => {
     if (!announcementInput.trim()) return;
     emitJourneyControl('START', announcementInput.trim());
     setAnnouncementInput('');
+  };
+
+  const handleSaveProfile = (event: React.FormEvent) => {
+    event.preventDefault();
+    updateProfile({
+      bio: profileBio,
+      interests: profileInterests
+        .split(',')
+        .map((interest) => interest.trim())
+        .filter(Boolean)
+        .slice(0, 8),
+      profileVisibility,
+    });
   };
 
   return (
@@ -209,7 +284,7 @@ export const MultiplayerSocialHub: React.FC = () => {
           {activeTab === 'chat' && (
             <div className="p-3 space-y-2.5">
               <div className="h-44 overflow-y-auto space-y-1.5 pr-1">
-                {currentRoom.chatHistory.map((m) => (
+                {visibleChatMessages.map((m) => (
                   <div
                     key={m.id}
                     className={`p-2 rounded-xl text-xs ${
@@ -254,10 +329,179 @@ export const MultiplayerSocialHub: React.FC = () => {
                 </select>
               </div>
 
+              {privateChatTargetId && (
+                <div className="flex flex-wrap items-center gap-1.5 rounded-lg border border-slate-800 bg-slate-950/70 p-2">
+                  <button
+                    type="button"
+                    disabled={friends.includes(privateChatTargetId)}
+                    onClick={() => emitFriendRequest(privateChatTargetId)}
+                    className="rounded-md bg-emerald-950/70 px-2 py-1 text-[10px] font-semibold text-emerald-200 hover:bg-emerald-900 disabled:opacity-60"
+                  >
+                    {friends.includes(privateChatTargetId)
+                      ? '✓ Bạn trong danh sách'
+                      : '＋ Kết bạn'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      blockedPlayerIds.includes(privateChatTargetId)
+                        ? emitUnblockPlayer(privateChatTargetId)
+                        : emitBlockPlayer(privateChatTargetId)
+                    }
+                    className="rounded-md bg-rose-950/70 px-2 py-1 text-[10px] font-semibold text-rose-200 hover:bg-rose-900"
+                  >
+                    {blockedPlayerIds.includes(privateChatTargetId)
+                      ? 'Bỏ chặn'
+                      : 'Chặn người chơi'}
+                  </button>
+                  <select
+                    value={reportReason}
+                    onChange={(event) => setReportReason(event.target.value)}
+                    className="rounded-md bg-slate-900 px-2 py-1 text-[10px] text-slate-200"
+                    aria-label="Lý do báo cáo"
+                  >
+                    <option value="harassment">Quấy rối</option>
+                    <option value="spam">Spam</option>
+                    <option value="inappropriate">Nội dung không phù hợp</option>
+                    <option value="other">Khác</option>
+                  </select>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      emitReportPlayer(privateChatTargetId, reportReason)
+                    }
+                    className="rounded-md bg-amber-950/70 px-2 py-1 text-[10px] font-semibold text-amber-200 hover:bg-amber-900"
+                  >
+                    Báo cáo
+                  </button>
+                </div>
+              )}
+
+              {incomingFriendRequests.length > 0 && (
+                <div className="space-y-1 rounded-lg border border-emerald-800/60 bg-emerald-950/30 p-2">
+                  <p className="text-[10px] font-bold text-emerald-300">
+                    Lời mời kết bạn trong phòng
+                  </p>
+                  {incomingFriendRequests.map((request) => (
+                    <div
+                      key={request.playerId}
+                      className="flex items-center justify-between gap-2 text-[10px]"
+                    >
+                      <span className="text-slate-200">{request.displayName}</span>
+                      <span className="flex gap-1">
+                        <button
+                          type="button"
+                          onClick={() => emitFriendResponse(request.playerId, true)}
+                          className="rounded bg-emerald-700 px-2 py-1 font-bold text-white"
+                        >
+                          Chấp nhận
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => emitFriendResponse(request.playerId, false)}
+                          className="rounded bg-slate-800 px-2 py-1 text-slate-300"
+                        >
+                          Từ chối
+                        </button>
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              <div className="rounded-lg border border-sky-800/60 bg-sky-950/30 p-2 space-y-2">
+                <button
+                  type="button"
+                  onClick={() => setMatchmakingEnabled(!matchmakingEnabled)}
+                  className={`w-full rounded-md px-2 py-1.5 text-[10px] font-bold ${
+                    matchmakingEnabled
+                      ? 'bg-sky-600 text-white'
+                      : 'bg-slate-800 text-slate-200 hover:bg-slate-700'
+                  }`}
+                >
+                  {matchmakingEnabled
+                    ? '🔎 Đang opt-in tìm bạn đồng hành • Tắt'
+                    : '🔎 Tìm bạn đồng hành (tự nguyện)'}
+                </button>
+                <p className="text-[10px] text-slate-400">
+                  Chỉ ghép với người trong phòng đã chủ động bật; cả hai phải chấp nhận.
+                </p>
+              </div>
+
+              {incomingMatchOffers.map((offer) => (
+                <div
+                  key={offer.offerId}
+                  className="flex items-center justify-between gap-2 rounded-lg border border-sky-700/60 bg-sky-950/50 p-2"
+                >
+                  <span className="text-[10px] text-sky-100">
+                    {offer.displayName} muốn kết nối. Chấp nhận?
+                  </span>
+                  <span className="flex gap-1">
+                    <button
+                      type="button"
+                      onClick={() => emitMatchResponse(offer.offerId, true)}
+                      className="rounded bg-emerald-700 px-2 py-1 text-[10px] font-bold text-white"
+                    >
+                      Đồng ý
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => emitMatchResponse(offer.offerId, false)}
+                      className="rounded bg-slate-800 px-2 py-1 text-[10px] text-slate-300"
+                    >
+                      Từ chối
+                    </button>
+                  </span>
+                </div>
+              ))}
+
+              <form
+                onSubmit={handleSaveProfile}
+                className="space-y-1.5 rounded-lg border border-slate-800 bg-slate-950/70 p-2"
+              >
+                <p className="text-[10px] font-bold text-slate-300">Hồ sơ người chơi</p>
+                <input
+                  value={profileBio}
+                  maxLength={160}
+                  onChange={(event) => setProfileBio(event.target.value)}
+                  placeholder="Giới thiệu ngắn"
+                  className="w-full rounded-md bg-slate-900 px-2 py-1 text-[10px] text-white"
+                />
+                <input
+                  value={profileInterests}
+                  onChange={(event) => setProfileInterests(event.target.value)}
+                  placeholder="Sở thích, cách nhau bằng dấu phẩy"
+                  className="w-full rounded-md bg-slate-900 px-2 py-1 text-[10px] text-white"
+                />
+                <div className="flex items-center gap-2">
+                  <select
+                    value={profileVisibility}
+                    onChange={(event) =>
+                      setProfileVisibility(event.target.value as 'public' | 'private')
+                    }
+                    className="flex-1 rounded-md bg-slate-900 px-2 py-1 text-[10px] text-white"
+                    aria-label="Quyền hiển thị hồ sơ"
+                  >
+                    <option value="public">Hiện hồ sơ trong phòng</option>
+                    <option value="private">Ẩn giới thiệu và sở thích</option>
+                  </select>
+                  <button
+                    type="submit"
+                    className="rounded-md bg-slate-700 px-2 py-1 text-[10px] font-bold text-white hover:bg-slate-600"
+                  >
+                    Lưu hồ sơ
+                  </button>
+                </div>
+              </form>
+
               <form onSubmit={handleSendRoomChat} className="flex gap-1.5">
                 <input
                   type="text"
                   maxLength={110}
+                  disabled={Boolean(
+                    privateChatTargetId &&
+                      blockedPlayerIds.includes(privateChatTargetId)
+                  )}
                   value={chatText}
                   onChange={(e) => setChatText(e.target.value)}
                   placeholder={
@@ -269,6 +513,10 @@ export const MultiplayerSocialHub: React.FC = () => {
                 />
                 <button
                   type="submit"
+                  disabled={Boolean(
+                    privateChatTargetId &&
+                      blockedPlayerIds.includes(privateChatTargetId)
+                  )}
                   className="px-3 py-1.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-xs"
                 >
                   Gửi
@@ -653,6 +901,41 @@ export const MultiplayerSocialHub: React.FC = () => {
                   </button>
                 </div>
               </div>
+
+              {isHostPeer && (
+                <div className="space-y-2 border-t border-slate-800 pt-3">
+                  <p className="font-bold text-rose-300">
+                    Báo cáo trong phiên ({moderationReports.length})
+                  </p>
+                  {moderationReports.length === 0 ? (
+                    <p className="text-[10px] text-slate-400">Chưa có báo cáo cần xem.</p>
+                  ) : (
+                    moderationReports.map((report) => (
+                      <div
+                        key={report.id}
+                        className="flex items-center justify-between gap-2 rounded-lg bg-slate-900 p-2"
+                      >
+                        <p className="text-[10px] text-slate-200">
+                          {currentRoom.players[report.reporterId]?.displayName ?? 'Người chơi'}
+                          {' → '}
+                          {currentRoom.players[report.targetId]?.displayName ?? 'Người chơi'}
+                          {' • '}{report.reason}
+                        </p>
+                        <button
+                          type="button"
+                          onClick={() => resolveModerationReport(report.id)}
+                          className="shrink-0 rounded bg-slate-700 px-2 py-1 text-[10px] text-white"
+                        >
+                          Đã xem
+                        </button>
+                      </div>
+                    ))
+                  )}
+                  <p className="text-[9px] text-slate-500">
+                    Report chỉ tồn tại trên host trong phiên hiện tại; nội dung chat riêng không được đính kèm.
+                  </p>
+                </div>
+              )}
             </div>
           )}
         </div>
