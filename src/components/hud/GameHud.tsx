@@ -8,6 +8,7 @@ import { PlayerActionHud } from './PlayerActionHud';
 import { MultiplayerLobbyModal } from './MultiplayerLobbyModal';
 import { MultiplayerSocialHub } from './MultiplayerSocialHub';
 import { PlayerGuideHub } from './PlayerGuideHub';
+import { LiveOpsFloatingDock } from './LiveOpsFloatingDock';
 
 export const GameHud: React.FC = () => {
   return (
@@ -21,6 +22,7 @@ export const GameHud: React.FC = () => {
 
         <div className="flex flex-col items-end gap-2.5">
           <TopRightControlPanel />
+          <LiveOpsFloatingDock />
           <MultiplayerSocialHub />
         </div>
       </header>
