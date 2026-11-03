@@ -38,7 +38,7 @@ interface MultiplayerStoreState {
   connectionLabel: string;
   isLobbyModalOpen: boolean;
   isSocialPanelOpen: boolean;
-  activeSocialTab: 'chat' | 'journey' | 'tickets' | 'music' | 'roles';
+  activeSocialTab: 'chat' | 'journey' | 'tickets' | 'music' | 'roles' | 'shop';
   user: AuthUserDto | null;
   accessToken: string | null;
   authError: string | null;
@@ -61,7 +61,7 @@ interface MultiplayerStoreState {
   setLobbyModalOpen: (open: boolean) => void;
   setSocialPanelOpen: (open: boolean) => void;
   setActiveSocialTab: (
-    tab: 'chat' | 'journey' | 'tickets' | 'music' | 'roles'
+    tab: 'chat' | 'journey' | 'tickets' | 'music' | 'roles' | 'shop'
   ) => void;
   setPrivateChatTargetId: (playerId: string | null) => void;
   login: (dto: LoginRequestDto) => Promise<boolean>;
@@ -111,6 +111,8 @@ interface MultiplayerStoreState {
     volume?: number
   ) => void;
   emitRoleAssign: (targetPlayerId: string, role: PlayerRole) => void;
+  emitShopPurchase: (itemId: string) => void;
+  emitShopEquip: (itemId: string | null) => void;
 }
 
 let savedOfflineScene: {
@@ -235,6 +237,23 @@ function mapMultiplayerPlayerToCharacterData(
 
 function syncRoomTo3DScene(room: RoomFullStateDto, selfPlayerId: string): void {
   captureOfflineSceneIfNeeded();
+
+  const selfPlayer = room.players[selfPlayerId];
+  const currentUser = useMultiplayerStore.getState().user;
+  if (selfPlayer && currentUser) {
+    const updatedUser: AuthUserDto = {
+      ...currentUser,
+      walletBalance: selfPlayer.walletBalance,
+      avatar: selfPlayer.avatar,
+      shirtColor: selfPlayer.shirtColor,
+      baseAvatar: selfPlayer.baseAvatar,
+      baseShirtColor: selfPlayer.baseShirtColor,
+      inventoryItemIds: selfPlayer.inventoryItemIds,
+      equippedItemId: selfPlayer.equippedItemId,
+    };
+    useMultiplayerStore.setState({ user: updatedUser });
+    p2pBusNetwork.updateLocalProfile(updatedUser);
+  }
 
   const charStore = useCharacterStore.getState();
   const nextCharacters: Record<string, CharacterData> = {};
@@ -375,8 +394,11 @@ p2pBusNetwork.setCallbacks({
   onRoomListUpdated: (rooms) => useMultiplayerStore.setState({ rooms }),
   onWalletUpdated: (walletBalance) => {
     const user = useMultiplayerStore.getState().user;
-    if (user)
-      useMultiplayerStore.setState({ user: { ...user, walletBalance } });
+    if (user) {
+      const updatedUser = { ...user, walletBalance };
+      useMultiplayerStore.setState({ user: updatedUser });
+      p2pBusNetwork.updateLocalWalletBalance(walletBalance);
+    }
   },
   onBlockedPlayers: (playerIds) => {
     const userId = useMultiplayerStore.getState().user?.id;
@@ -663,4 +685,8 @@ export const useMultiplayerStore = create<MultiplayerStoreState>((set, get) => (
     const payload: AssignRolePayload = { roomId, targetPlayerId, role };
     p2pBusNetwork.sendAction('ROLE', payload);
   },
+  emitShopPurchase: (itemId) =>
+    p2pBusNetwork.sendAction('SHOP_PURCHASE', { itemId }),
+  emitShopEquip: (itemId) =>
+    p2pBusNetwork.sendAction('SHOP_EQUIP', { itemId }),
 }));

@@ -4,6 +4,7 @@ import {
   CheckCircle2,
   Copy,
   CreditCard,
+  Coins,
   LogOut,
   MapPin,
   Megaphone,
@@ -12,11 +13,16 @@ import {
   Pause,
   Play,
   Shield,
+  ShoppingBag,
   SkipForward,
   Ticket,
   Volume2,
 } from 'lucide-react';
-import { DEFAULT_MUSIC_TRACKS, PlayerRole } from '@virtual-bus/shared';
+import {
+  COSMETIC_SHOP_ITEMS,
+  DEFAULT_MUSIC_TRACKS,
+  PlayerRole,
+} from '@virtual-bus/shared';
 import { useMultiplayerStore } from '../../stores/useMultiplayerStore';
 
 export const MultiplayerSocialHub: React.FC = () => {
@@ -73,6 +79,8 @@ export const MultiplayerSocialHub: React.FC = () => {
     (state) => state.emitMusicControl
   );
   const emitRoleAssign = useMultiplayerStore((state) => state.emitRoleAssign);
+  const emitShopPurchase = useMultiplayerStore((state) => state.emitShopPurchase);
+  const emitShopEquip = useMultiplayerStore((state) => state.emitShopEquip);
   const emitDisembark = useMultiplayerStore((state) => state.emitDisembark);
   const emitReturnToBus = useMultiplayerStore((state) => state.emitReturnToBus);
   const emitBlockPlayer = useMultiplayerStore((state) => state.emitBlockPlayer);
@@ -213,7 +221,20 @@ export const MultiplayerSocialHub: React.FC = () => {
       {isSocialPanelOpen && (
         <div className="w-80 sm:w-96 rounded-2xl bg-slate-950/90 backdrop-blur-xl border border-slate-800 shadow-2xl overflow-hidden text-slate-100">
           {/* Navigation Tabs */}
-          <div className="grid grid-cols-5 bg-slate-900/90 border-b border-slate-800 text-[11px] font-semibold">
+          <div className="grid grid-cols-6 bg-slate-900/90 border-b border-slate-800 text-[11px] font-semibold">
+            <button
+              type="button"
+              onClick={() => setActiveTab('shop')}
+              className={`py-2.5 flex flex-col items-center gap-1 ${
+                activeTab === 'shop'
+                  ? 'text-amber-400 border-b-2 border-amber-400 bg-slate-950/60'
+                  : 'text-slate-400 hover:text-white'
+              }`}
+            >
+              <ShoppingBag className="w-3.5 h-3.5" />
+              <span>Shop</span>
+            </button>
+
             <button
               type="button"
               onClick={() => setActiveTab('chat')}
@@ -844,6 +865,78 @@ export const MultiplayerSocialHub: React.FC = () => {
                   className="flex-1 accent-amber-500 cursor-pointer"
                 />
               </div>
+            </div>
+          )}
+
+          {activeTab === 'shop' && (
+            <div className="p-3.5 space-y-3 text-xs">
+              <div className="flex items-center justify-between rounded-xl border border-amber-500/30 bg-amber-950/30 p-3">
+                <div>
+                  <p className="font-bold text-amber-200">Ví xu của bạn</p>
+                  <p className="mt-0.5 text-[10px] text-slate-400">
+                    Vật phẩm được lưu theo tài khoản trên thiết bị này.
+                  </p>
+                </div>
+                <span className="flex items-center gap-1.5 text-base font-black text-amber-300">
+                  <Coins className="h-4 w-4" />
+                  {selfPlayer?.walletBalance ?? user.walletBalance}
+                </span>
+              </div>
+
+              <div className="max-h-72 space-y-2 overflow-y-auto pr-1">
+                {COSMETIC_SHOP_ITEMS.map((item) => {
+                  const inventory = selfPlayer?.inventoryItemIds ?? user.inventoryItemIds ?? [];
+                  const owned = inventory.includes(item.id);
+                  const equipped = selfPlayer?.equippedItemId === item.id;
+                  return (
+                    <div
+                      key={item.id}
+                      className="flex items-center gap-3 rounded-xl border border-slate-800 bg-slate-900/80 p-2.5"
+                    >
+                      <div
+                        className="grid h-10 w-10 shrink-0 place-items-center rounded-xl border border-white/10 text-lg"
+                        style={{ backgroundColor: item.shirtColor ?? '#334155' }}
+                      >
+                        {item.avatar ?? '👕'}
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate font-bold text-slate-100">{item.name}</p>
+                        <p className="text-[10px] text-slate-400">{item.description}</p>
+                        <p className="mt-0.5 text-[10px] font-semibold text-amber-300">{item.priceCoins} xu</p>
+                      </div>
+                      {equipped ? (
+                        <button
+                          type="button"
+                          onClick={() => emitShopEquip(null)}
+                          className="shrink-0 rounded-lg border border-emerald-500/40 bg-emerald-950/50 px-2 py-1.5 text-[10px] font-bold text-emerald-300"
+                        >
+                          Đang dùng
+                        </button>
+                      ) : owned ? (
+                        <button
+                          type="button"
+                          onClick={() => emitShopEquip(item.id)}
+                          className="shrink-0 rounded-lg bg-slate-700 px-2 py-1.5 text-[10px] font-bold text-white hover:bg-slate-600"
+                        >
+                          Trang bị
+                        </button>
+                      ) : (
+                        <button
+                          type="button"
+                          disabled={(selfPlayer?.walletBalance ?? user.walletBalance) < item.priceCoins}
+                          onClick={() => emitShopPurchase(item.id)}
+                          className="shrink-0 rounded-lg bg-amber-500 px-2 py-1.5 text-[10px] font-bold text-slate-950 hover:bg-amber-400 disabled:cursor-not-allowed disabled:opacity-40"
+                        >
+                          Mua
+                        </button>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+              <p className="text-[9px] leading-relaxed text-slate-500">
+                Host phòng xác nhận giao dịch và đồng bộ vật phẩm trong chuyến đi. Xu không có giá trị tiền mặt.
+              </p>
             </div>
           )}
 

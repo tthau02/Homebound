@@ -12,6 +12,7 @@ Trò chơi mô phỏng xe khách đường dài 3D trên trình duyệt. Toàn b
 - Private chat gửi riêng cho hai bên, block/report, và matchmaking opt-in yêu cầu cả hai chấp nhận.
 - Tại trạm: hành khách có thể xuống xe, đi bộ trong khu vực giới hạn, check-in ở khung ảnh và quay lại xe.
 - Host P2P quản lý trạng thái phòng, điểm dừng, thời tiết và các thao tác multiplayer.
+- Shop cosmetic P2P với coin demo, inventory, mua/trang bị/tháo avatar hoặc màu áo; host kiểm tra giao dịch trong room.
 
 ## Chạy ứng dụng
 
@@ -45,3 +46,5 @@ Một peer giữ vai trò host và xử lý trạng thái chuyến xe; các peer
 Tài khoản demo được tạo trong localStorage của trình duyệt. Dữ liệu tài khoản và phòng không phải dịch vụ tài khoản hay lưu trữ dùng chung giữa các thiết bị; trạng thái authoritative của room nằm trên peer host đang chạy.
 
 Bạn bè, block và hồ sơ lưu ở localStorage theo tài khoản trình duyệt. Lời mời kết bạn và matchmaking chỉ hoạt động giữa người cùng room; report metadata chỉ tồn tại trong bộ nhớ host của phiên hiện tại. Host rời phòng sẽ kết thúc room và các lời mời đang chờ.
+
+Ví coin demo và inventory cosmetic cũng lưu trong localStorage trên trình duyệt hiện tại, không đồng bộ giữa thiết bị. Host xác nhận giao dịch trong room nhưng không phải authority bảo mật như backend tin cậy; không có ledger giao dịch hay thanh toán tiền thật.
