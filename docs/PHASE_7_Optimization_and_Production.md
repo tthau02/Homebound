@@ -1,17 +1,19 @@
 # ROAD MATE — PHASE 7
 ## Optimization & Production Readiness
 
-**Mục tiêu:** Đưa Roadmate từ beta thành hệ thống có thể phát hành ổn định: hiệu năng tốt trên trình duyệt, backend an toàn, có kiểm thử, triển khai lặp lại được và có giám sát.
+**Mục tiêu:** Chuẩn bị frontend Virtual Bus 3D cho phát hành tĩnh, tối ưu tải/render và multiplayer P2P, có CI kiểm tra lặp lại được và mô tả đúng giới hạn vận hành.
+
+> **Kiến trúc:** Không có backend, database hay Socket.IO. Room authority là host peer trong phiên; tài khoản lưu cục bộ. CI hiện chỉ kiểm tra type và production build. Không có server-side security, durable room recovery, monitoring tập trung hoặc backup dữ liệu người chơi.
 
 ## 1. Phạm vi
 
 - Tối ưu render 3D và tải tài nguyên.
 - Tối ưu mạng realtime.
-- Kiểm thử tải backend/socket.
-- Bảo mật API, Socket.IO và dữ liệu.
-- CI/CD và môi trường staging/production.
-- Logging, metrics, error tracking.
-- Backup/restore và kế hoạch khôi phục.
+- Đo hiệu năng trình duyệt và tải tài nguyên.
+- Tối ưu mạng realtime P2P.
+- Validate các action ở host và giới hạn payload/tần suất.
+- CI cho type-check và production build; deploy static host được cấu hình riêng.
+- Error reporting tuân thủ quyền riêng tư nếu được bổ sung.
 - Kiểm thử trình duyệt, thiết bị và khả năng truy cập.
 - Quy trình release và rollback.
 
@@ -44,30 +46,26 @@ Các ngưỡng FPS, dung lượng và thời gian tải phải được đo trê
 - Kiểm soát kích thước payload.
 - Backpressure và giới hạn tần suất.
 - Reconnect có exponential backoff.
-- Phục hồi room state từ server.
+- Room state chỉ còn sống trên host peer; reconnect/room recovery từ server không áp dụng.
 - Kiểm tra mất gói, latency và jitter.
 - Không ghi vị trí từng frame vào PostgreSQL.
 
-## 4. Backend & Database
-- Index cho truy vấn phòng, thành viên, hội thoại và giao dịch.
-- Pagination cho danh sách và lịch sử.
-- Connection pooling.
-- Kiểm tra slow query.
-- Transaction cho thao tác ghế, vé và ví.
-- Giới hạn request và Socket event.
-- Health/readiness endpoints.
-- Tách cấu hình development/staging/production.
-- Secrets chỉ lưu trong secret manager hoặc biến môi trường an toàn.
+## 4. Client storage & P2P trust boundary
+- Không thêm database, REST API, Socket.IO, backend, health endpoint hay backup server.
+- localStorage dùng cho tài khoản demo và dữ liệu cục bộ; người dùng có thể sửa/xóa dữ liệu.
+- Host peer kiểm tra thao tác trong room nhưng có thể bị sửa đổi; không dùng cho coin có giá trị thật hay dữ liệu nhạy cảm.
+- Chỉ đưa public config vào build; không đặt secrets hoặc thông tin riêng tư trong frontend bundle.
+- Trình duyệt cần dùng HTTPS trên static hosting để WebRTC và các browser API hoạt động đầy đủ.
 
 ## 5. Security
-- Xác thực và phân quyền server-side.
-- Validate input ở mọi REST/Socket boundary.
-- Rate limit theo IP/user/room phù hợp.
+- Không có xác thực server-side. Tài khoản local chỉ phục vụ demo.
+- Validate dữ liệu tại action boundary của host P2P.
+- Giới hạn tần suất theo peer/room khi action có nguy cơ spam.
 - Chống spam, payload quá lớn và event flooding.
-- CORS và cookie/token policy đúng cấu hình.
+- CORS/cookie không áp dụng khi không có API riêng.
 - Bảo vệ XSS, injection và upload file độc hại.
 - Kiểm tra quyền đọc private chat/profile.
-- Kiểm tra quyền admin và audit log.
+- Không coi quyền trong client/host peer là quyền admin an toàn.
 - Không ghi token, mật khẩu hoặc nội dung riêng tư vào log.
 - Dependency scanning và cập nhật thư viện.
 - Quy trình xử lý lỗ hổng và sự cố.
@@ -83,11 +81,10 @@ Các ngưỡng FPS, dung lượng và thời gian tải phải được đo trê
 - Moderation/block rules.
 
 ### Integration tests
-- REST + database.
-- Socket room isolation.
+- P2P room isolation.
 - Reconnect/disconnect.
 - Concurrent seat selection.
-- Concurrent purchase.
+- Purchase validation within a single host session.
 - Private chat authorization.
 
 ### E2E tests
@@ -111,46 +108,28 @@ Môi trường:
 
 Pipeline:
 1. Install dependencies.
-2. Lint.
-3. Typecheck.
-4. Unit/integration tests.
-5. Build frontend/backend.
-6. Security/dependency checks.
-7. Deploy staging.
-8. Smoke test.
-9. Manual approval hoặc release gate.
-10. Deploy production.
-11. Health check và rollback nếu lỗi.
+2. Lint/type-check.
+3. Build frontend.
+4. Review dependency changes.
+5. Deploy artifact lên static hosting qua workflow riêng.
+6. Smoke test và rollback theo khả năng của nhà cung cấp static hosting.
 
-Dùng Docker cho backend và dịch vụ phụ trợ. Frontend có thể deploy lên static hosting/CDN. Database migration phải có kế hoạch backup, tương thích ngược và rollback phù hợp.
+Workflow `.github/workflows/frontend-ci.yml` hiện chạy `npm ci`, `npm run lint` và `npm run build` khi push/pull request. Chưa cấu hình nhà cung cấp deploy, staging, secret, release gate hay rollback tự động.
 
 ## 8. Observability & Operations
-- Centralized structured logs.
-- Error tracking.
-- Metrics CPU/RAM, latency, error rate, active rooms, connected sockets.
-- Dashboard theo dõi.
-- Alert khi lỗi tăng, server quá tải hoặc database mất kết nối.
-- Health check.
-- Backup tự động và kiểm tra restore định kỳ.
-- Runbook cho sự cố phổ biến.
+- CI log chỉ hiển thị kết quả build; runtime telemetry chưa được bật.
+- Có thể theo dõi lỗi phía browser sau khi chọn provider và chính sách consent.
+- Active rooms/peers hiện chỉ quan sát trong client; không có dashboard tập trung.
+- Dữ liệu localStorage không có backup hoặc restore tự động.
+- Runbook phải bao gồm signaling/WebRTC connectivity và cách báo lỗi từ client.
 - Không thu thập dữ liệu cá nhân quá mức.
 
-## 9. Cấu trúc hạ tầng gợi ý
+## 9. Cấu trúc phát hành gợi ý
 
 ```text
-infra/
-  docker/
-  ci/
-  monitoring/
-  dashboards/
-  alerts/
-  scripts/
-  runbooks/
-docs/
-  architecture/
-  security/
-  deployment/
-  incident-response/
+.github/workflows/frontend-ci.yml
+dist/                         # static build artifact
+docs/PHASE_7_Optimization_and_Production.md
 ```
 
 ## 10. Thứ tự triển khai
@@ -158,38 +137,34 @@ docs/
 1. Định nghĩa thiết bị và mức tải mục tiêu.
 2. Thiết lập baseline performance.
 3. Tối ưu 3D và asset pipeline.
-4. Tối ưu Socket/network.
-5. Tối ưu database.
-6. Hoàn thiện security review.
-7. Bổ sung unit/integration/E2E tests.
-8. Thiết lập load test và chạy thử.
-9. Thiết lập CI/CD staging.
-10. Thiết lập monitoring, alert và backup.
-11. Diễn tập restore/rollback.
-12. Chạy production readiness review.
+4. Tối ưu P2P/network theo profile đo được.
+5. Rà soát trust boundary, input validation, privacy và dependency.
+6. Cấu hình static host và deploy workflow sau khi chọn nhà cung cấp.
+7. Chuẩn bị browser error reporting/telemetry nếu có consent và chính sách rõ ràng.
+8. Chạy production readiness review cho đúng phạm vi frontend-only.
 
 ## 11. Tiêu chí nghiệm thu
 
 - [ ] Có baseline và báo cáo hiệu năng trên thiết bị mục tiêu.
 - [ ] Không có memory leak nghiêm trọng qua kiểm thử dài.
 - [ ] Asset tải theo nhu cầu và có fallback.
-- [ ] Socket event có giới hạn và room isolation.
+- [x] P2P movement có throttle và host xử lý action trong phạm vi room.
 - [ ] Các luồng ghế, ví, vé và quyền truy cập có test.
 - [ ] Load test có báo cáo số phòng/người chơi và bottleneck.
-- [ ] CI chạy lint, typecheck, test và build.
-- [ ] Có staging và production config riêng.
+- [x] CI chạy lint/type-check và build frontend.
+- [ ] Có staging và production deploy config riêng.
 - [ ] Secrets không nằm trong repository.
-- [ ] Có logging, metrics, error tracking và alert.
-- [ ] Backup và restore đã được diễn tập.
+- [ ] Có runtime logging, metrics, error tracking và alert.
+- [ ] Có backup/restore cho dữ liệu bền vững (hiện tại không có server data store).
 - [ ] Có runbook, quy trình rollback và người chịu trách nhiệm.
 - [ ] Không còn lỗi mức nghiêm trọng/cao chưa có phương án xử lý.
 
 ## 12. Prompt giao cho AI code
 
-Hãy thực hiện Phase 7 trên codebase Roadmate hiện tại. Không tối ưu theo cảm tính: trước tiên đo baseline và xác định bottleneck bằng công cụ phù hợp.
+Hãy thực hiện Phase 7 trên codebase Virtual Bus frontend-only. Không giả định backend, database hay Socket.IO tồn tại. Không tối ưu theo cảm tính: trước tiên đo baseline trên browser/device mục tiêu và xác định bottleneck bằng công cụ phù hợp.
 
-Kiểm tra frontend 3D, asset loading, Socket.IO, NestJS, PostgreSQL và Redis (nếu đã dùng). Ưu tiên sửa vấn đề có bằng chứng đo được. Bổ sung test cho các luồng quan trọng và load test có thể lặp lại.
+Kiểm tra frontend 3D, asset loading, PeerJS/WebRTC và local storage. Ưu tiên sửa vấn đề có bằng chứng đo được. Không đưa secrets vào bundle và không quảng bá host peer như server an toàn.
 
-Thiết lập CI/CD, staging, production configuration, health checks, logging, metrics, error tracking, backup và runbook. Không đưa secrets vào code hoặc log. Không chạy migration phá hủy dữ liệu production.
+Thiết lập CI cho lint/build và cấu hình static deployment chỉ sau khi biết nhà cung cấp. Ghi rõ phần nào như server monitoring, health checks và backup không áp dụng với kiến trúc hiện tại.
 
-Sau mỗi thay đổi chạy test, typecheck và build. Cung cấp báo cáo trước/sau, thiết bị và điều kiện đo, kết quả load test, giới hạn còn lại và checklist production readiness. Không tuyên bố hệ thống sẵn sàng phát hành nếu còn lỗi nghiêm trọng chưa xử lý.
+Sau mỗi thay đổi chạy lint và build. Cung cấp báo cáo trước/sau, thiết bị và điều kiện đo, giới hạn còn lại và checklist production readiness. Không tuyên bố hệ thống sẵn sàng phát hành nếu chưa kiểm tra trên browser/device mục tiêu.

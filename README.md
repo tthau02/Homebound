@@ -30,6 +30,8 @@ npm run lint
 npm run build
 ```
 
+GitHub Actions chạy lint/type-check và production build trên mỗi push/pull request qua `.github/workflows/frontend-ci.yml`.
+
 ## Cấu trúc
 
 - `src/game/`: scene 3D, xe, nhân vật, camera, môi trường và trạm dừng.
