@@ -1,0 +1,34 @@
+{
+  "name": "virtual-bus-backend",
+  "version": "0.3.0",
+  "private": true,
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "start": "node -r ./tsconfig-paths-bootstrap.js dist/backend/src/main.js",
+    "start:dev": "npx ts-node -r tsconfig-paths/register src/main.ts",
+    "lint": "tsc --noEmit",
+    "prisma:generate": "npx prisma generate",
+    "prisma:validate": "npx prisma validate",
+    "prisma:migrate": "npx prisma migrate dev --name init_virtual_bus"
+  },
+  "dependencies": {
+    "@nestjs/common": "^10.4.7",
+    "@nestjs/core": "^10.4.7",
+    "@nestjs/jwt": "^10.2.0",
+    "@nestjs/platform-express": "^10.4.7",
+    "@nestjs/platform-socket.io": "^10.4.7",
+    "@nestjs/websockets": "^10.4.7",
+    "@prisma/client": "^5.22.0",
+    "reflect-metadata": "^0.2.2",
+    "rxjs": "^7.8.1",
+    "socket.io": "^4.8.1"
+  },
+  "devDependencies": {
+    "@types/express": "^5.0.0",
+    "@types/node": "^22.9.0",
+    "prisma": "^5.22.0",
+    "ts-node": "^10.9.2",
+    "tsconfig-paths": "^4.2.0",
+    "typescript": "~5.6.2"
+  }
+}
