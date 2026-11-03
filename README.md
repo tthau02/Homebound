@@ -13,6 +13,7 @@ Trò chơi mô phỏng xe khách đường dài 3D trên trình duyệt. Toàn b
 - Tại trạm: hành khách có thể xuống xe, đi bộ trong khu vực giới hạn, check-in ở khung ảnh và quay lại xe.
 - Host P2P quản lý trạng thái phòng, điểm dừng, thời tiết và các thao tác multiplayer.
 - Shop cosmetic P2P với coin demo, inventory, mua/trang bị/tháo avatar hoặc màu áo; host kiểm tra giao dịch trong room.
+- Hướng dẫn người chơi, FAQ, release notes và xuất tệp góp ý không gửi dữ liệu tự động.
 
 ## Chạy ứng dụng
 
@@ -39,7 +40,8 @@ GitHub Actions chạy lint/type-check và production build trên mỗi push/pull
 - `src/stores/`: trạng thái game, nhân vật, ghế, chat và kết nối P2P.
 - `src/services/p2pBusNetwork.ts`: tài khoản demo phía trình duyệt, PeerJS/WebRTC, host room và đồng bộ P2P.
 - `packages/shared/`: kiểu dữ liệu, tuyến mẫu và cấu hình dùng chung giữa các module frontend.
-- `docs/PHASE_4_World_and_Gameplay_Expansion.md` đến `docs/PHASE_8_Launch_and_Live_Operations.md`: phạm vi và kế hoạch cho các phase tiếp theo.
+- `docs/PHASE_4_World_and_Gameplay_Expansion.md` đến `docs/PHASE_8_Launch_and_Live_Operations.md`: phạm vi, triển khai và giới hạn theo từng phase.
+- [Hướng dẫn người chơi](docs/PLAYER_GUIDE.md) · [Release notes](docs/RELEASE_NOTES.md).
 
 ## Multiplayer P2P
 

@@ -2,6 +2,7 @@ import React, { Suspense } from 'react';
 import { Canvas } from '@react-three/fiber';
 import { useGameStore } from '../../stores/useGameStore';
 import { GameWorld } from './GameWorld';
+import { PerformanceProbe3D } from './PerformanceProbe3D';
 import { CAMERA_PRESETS } from '../config/cameraConfig';
 
 export const GameCanvas: React.FC = () => {
@@ -34,6 +35,7 @@ export const GameCanvas: React.FC = () => {
       >
         <Suspense fallback={null}>
           <GameWorld />
+          <PerformanceProbe3D />
         </Suspense>
       </Canvas>
     </div>

@@ -7,6 +7,8 @@ import { CharacterInteractionMenu } from './CharacterInteractionMenu';
 import { PlayerActionHud } from './PlayerActionHud';
 import { MultiplayerLobbyModal } from './MultiplayerLobbyModal';
 import { MultiplayerSocialHub } from './MultiplayerSocialHub';
+import { PlayerGuideHub } from './PlayerGuideHub';
+import { LiveOpsFloatingDock } from './LiveOpsFloatingDock';
 
 export const GameHud: React.FC = () => {
   return (
@@ -20,6 +22,7 @@ export const GameHud: React.FC = () => {
 
         <div className="flex flex-col items-end gap-2.5">
           <TopRightControlPanel />
+          <LiveOpsFloatingDock />
           <MultiplayerSocialHub />
         </div>
       </header>
@@ -29,6 +32,7 @@ export const GameHud: React.FC = () => {
 
       {/* Multiplayer Auth & Room Lobby Modal */}
       <MultiplayerLobbyModal />
+      <PlayerGuideHub />
 
       {/* Bottom Area: Player Chat/Emote/Movement Controls + Vehicle Telemetry Bar */}
       <footer className="w-full">
