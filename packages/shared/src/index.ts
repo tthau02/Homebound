@@ -93,6 +93,10 @@ export interface AuthUserDto {
   bio?: string;
   interests?: string[];
   profileVisibility?: 'public' | 'private';
+  baseAvatar?: string;
+  baseShirtColor?: string;
+  inventoryItemIds?: string[];
+  equippedItemId?: string | null;
 }
 
 export interface LoginRequestDto {
@@ -181,7 +185,58 @@ export interface MultiplayerPlayerState {
   bio?: string;
   interests?: string[];
   profileVisibility?: 'public' | 'private';
+  baseAvatar?: string;
+  baseShirtColor?: string;
+  inventoryItemIds?: string[];
+  equippedItemId?: string | null;
 }
+
+export interface CosmeticShopItemDto {
+  id: string;
+  name: string;
+  description: string;
+  priceCoins: number;
+  avatar?: string;
+  shirtColor?: string;
+}
+
+export const COSMETIC_SHOP_ITEMS: CosmeticShopItemDto[] = [
+  {
+    id: 'look-mekong-sunset',
+    name: 'Hoàng hôn Mekong',
+    description: 'Áo khoác màu cam hoàng hôn.',
+    priceCoins: 120,
+    shirtColor: '#f97316',
+  },
+  {
+    id: 'look-river-teal',
+    name: 'Sóng nước miền Tây',
+    description: 'Áo màu xanh ngọc dịu mắt.',
+    priceCoins: 150,
+    shirtColor: '#0f766e',
+  },
+  {
+    id: 'look-night-violet',
+    name: 'Đêm cao nguyên',
+    description: 'Áo tím cho những chuyến xe đêm.',
+    priceCoins: 180,
+    shirtColor: '#7c3aed',
+  },
+  {
+    id: 'avatar-cat',
+    name: 'Mèo du lịch',
+    description: 'Avatar mèo vui vẻ cho hồ sơ.',
+    priceCoins: 90,
+    avatar: '🐱',
+  },
+  {
+    id: 'avatar-capybara',
+    name: 'Capybara thư thái',
+    description: 'Avatar capybara cho chuyến đi bình yên.',
+    priceCoins: 110,
+    avatar: '🦫',
+  },
+];
 
 export interface ChatMessageDto {
   id: string;

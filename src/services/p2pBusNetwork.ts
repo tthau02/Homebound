@@ -4,6 +4,7 @@ import {
   AuthUserDto,
   BusRouteDto,
   ChatMessageDto,
+  COSMETIC_SHOP_ITEMS,
   CreateRoomPayload,
   DEFAULT_MUSIC_TRACKS,
   DEFAULT_ROUTES,
@@ -79,7 +80,9 @@ export type P2PPacket =
         | 'MATCHMAKING'
         | 'FRIEND_REQUEST'
         | 'FRIEND_RESPONSE'
-        | 'PROFILE';
+        | 'PROFILE'
+        | 'SHOP_PURCHASE'
+        | 'SHOP_EQUIP';
       payload: unknown;
     }
   | {
@@ -464,6 +467,10 @@ export class P2PBusNetworkService {
           avatar: '🧑‍🚀',
           shirtColor: '#f59e0b',
           walletBalance: 500000,
+          baseAvatar: '🧑‍🚀',
+          baseShirtColor: '#f59e0b',
+          inventoryItemIds: [],
+          equippedItemId: null,
           passwordHash: dto.password || '123456',
         };
         accounts[key] = autoUser;
@@ -483,6 +490,10 @@ export class P2PBusNetworkService {
         bio: existing.bio,
         interests: existing.interests,
         profileVisibility: existing.profileVisibility,
+        baseAvatar: existing.baseAvatar ?? existing.avatar,
+        baseShirtColor: existing.baseShirtColor ?? existing.shirtColor,
+        inventoryItemIds: existing.inventoryItemIds ?? [],
+        equippedItemId: existing.equippedItemId ?? null,
       };
       this.selfUser = sessionUser;
       return { user: sessionUser };
@@ -511,6 +522,10 @@ export class P2PBusNetworkService {
         bio: dto.bio?.trim().slice(0, 160) ?? '',
         interests: (dto.interests ?? []).slice(0, 8),
         profileVisibility: dto.profileVisibility ?? 'public',
+        baseAvatar: dto.avatar || '🧑‍🚀',
+        baseShirtColor: dto.shirtColor || '#f59e0b',
+        inventoryItemIds: [],
+        equippedItemId: null,
         passwordHash: dto.password || '123456',
       };
 
@@ -555,6 +570,22 @@ export class P2PBusNetworkService {
       localStorage.setItem(ACCOUNTS_STORAGE_KEY, JSON.stringify(accounts));
     } catch {
       // Keep active profile state when local storage is unavailable.
+    }
+  }
+
+  public updateLocalWalletBalance(walletBalance: number): void {
+    if (!this.selfUser) return;
+    this.selfUser = { ...this.selfUser, walletBalance };
+    try {
+      const raw = localStorage.getItem(ACCOUNTS_STORAGE_KEY);
+      const accounts: Record<string, StoredAccount> = raw ? JSON.parse(raw) : {};
+      const key = this.selfUser.username.toLowerCase();
+      const account = accounts[key];
+      if (!account) return;
+      accounts[key] = { ...account, walletBalance };
+      localStorage.setItem(ACCOUNTS_STORAGE_KEY, JSON.stringify(accounts));
+    } catch {
+      // Keep the active wallet value if browser storage is unavailable.
     }
   }
 
@@ -874,7 +905,9 @@ export class P2PBusNetworkService {
       | 'MATCHMAKING'
       | 'FRIEND_REQUEST'
       | 'FRIEND_RESPONSE'
-      | 'PROFILE',
+      | 'PROFILE'
+      | 'SHOP_PURCHASE'
+      | 'SHOP_EQUIP',
     payload: unknown
   ): void {
     if (!this.currentRoomId || !this.selfUser) return;
@@ -1158,6 +1191,10 @@ export class P2PBusNetworkService {
       isDisembarked: false,
       connected: true,
       walletBalance: user.walletBalance,
+      baseAvatar: user.baseAvatar ?? user.avatar,
+      baseShirtColor: user.baseShirtColor ?? user.shirtColor,
+      inventoryItemIds: user.inventoryItemIds ?? [],
+      equippedItemId: user.equippedItemId ?? null,
       bio: user.bio ?? '',
       interests: user.interests ?? [],
       profileVisibility: user.profileVisibility ?? 'public',
@@ -1266,7 +1303,9 @@ export class P2PBusNetworkService {
       | 'MATCHMAKING'
       | 'FRIEND_REQUEST'
       | 'FRIEND_RESPONSE'
-      | 'PROFILE',
+      | 'PROFILE'
+      | 'SHOP_PURCHASE'
+      | 'SHOP_EQUIP',
     rawPayload: unknown
   ): void {
     const room = this.hostedRoom;
@@ -1948,6 +1987,57 @@ export class P2PBusNetworkService {
           ? 'private'
           : 'public';
         this.broadcastHostedRoomState(`${player.displayName} đã cập nhật hồ sơ.`);
+        break;
+      }
+
+      case 'SHOP_PURCHASE': {
+        const payload = rawPayload as { itemId?: string };
+        const item = COSMETIC_SHOP_ITEMS.find(
+          (catalogItem) => catalogItem.id === payload.itemId
+        );
+        if (!item) {
+          this.sendErrorToPlayer(playerId, 'Vật phẩm này không có trong catalog.');
+          return;
+        }
+        const inventory = player.inventoryItemIds ?? [];
+        if (inventory.includes(item.id)) {
+          this.sendErrorToPlayer(playerId, 'Bạn đã sở hữu vật phẩm này.');
+          return;
+        }
+        if (player.walletBalance < item.priceCoins) {
+          this.sendErrorToPlayer(playerId, 'Bạn chưa đủ coin để mua vật phẩm này.');
+          return;
+        }
+        player.walletBalance -= item.priceCoins;
+        player.inventoryItemIds = [...inventory, item.id];
+        if (playerId === this.selfUser?.id) {
+          this.callbacks?.onWalletUpdated(player.walletBalance);
+        }
+        this.broadcastHostedRoomState(
+          `Đã mua ${item.name} với ${item.priceCoins} coin.`
+        );
+        break;
+      }
+
+      case 'SHOP_EQUIP': {
+        const payload = rawPayload as { itemId?: string | null };
+        const itemId = payload.itemId ?? null;
+        if (itemId) {
+          const item = COSMETIC_SHOP_ITEMS.find((entry) => entry.id === itemId);
+          if (!item || !(player.inventoryItemIds ?? []).includes(itemId)) {
+            this.sendErrorToPlayer(playerId, 'Vật phẩm chưa được sở hữu.');
+            return;
+          }
+          player.equippedItemId = itemId;
+          player.avatar = item.avatar ?? player.baseAvatar ?? player.avatar;
+          player.shirtColor = item.shirtColor ?? player.baseShirtColor ?? player.shirtColor;
+          this.broadcastHostedRoomState(`Đã trang bị ${item.name}.`);
+        } else {
+          player.equippedItemId = null;
+          player.avatar = player.baseAvatar ?? '🧑‍🚀';
+          player.shirtColor = player.baseShirtColor ?? '#f59e0b';
+          this.broadcastHostedRoomState(`${player.displayName} đã tháo cosmetic.`);
+        }
         break;
       }
     }

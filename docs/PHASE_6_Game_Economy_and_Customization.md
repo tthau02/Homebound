@@ -3,6 +3,19 @@
 
 **Mục tiêu:** Cho phép người chơi cá nhân hóa avatar và trải nghiệm bằng tiền ảo/vật phẩm trong game, với kinh tế cân bằng, minh bạch và không pay-to-win.
 
+> **Kiến trúc hiện tại:** Dự án chạy hoàn toàn ở frontend. Multiplayer dùng PeerJS/WebRTC; host của room kiểm tra giao dịch và phát state cho các peer. Đây là authority trong phiên chơi, không phải ranh giới bảo mật như backend tin cậy. Ví và kho đồ tài khoản demo lưu trong localStorage của từng trình duyệt.
+
+### Phạm vi MVP đã triển khai
+- Catalog cosmetic tĩnh gồm các avatar và màu áo, định giá bằng coin nội bộ.
+- Host kiểm tra item, số dư và quyền sở hữu trước khi mua/trang bị/tháo.
+- Số dư, inventory và cosmetic hiện tại được đồng bộ trong room; giao diện có ví và shop.
+- Tài khoản demo lưu ví và inventory trên localStorage của trình duyệt.
+
+### Chưa có trong MVP
+- Wallet ledger/lịch sử giao dịch, reward nhiệm vụ, admin catalog, persistence giữa thiết bị và chống gian lận đáng tin cậy.
+- Giao dịch an toàn trước host độc hại, giao dịch đồng thời nhiều room, idempotency bền vững hoặc quản trị catalog từ xa.
+- Cosmetic 3D đầy đủ; MVP chỉ thay avatar hồ sơ và màu áo nhân vật.
+
 ## 1. Phạm vi
 
 ### Trong phạm vi
@@ -27,11 +40,11 @@
 ## 2. Nguyên tắc kinh tế
 
 - Tiền ảo không được tạo hoặc trừ ở client.
-- Mọi giao dịch phải được server xác thực.
-- Dùng ledger bất biến hoặc lịch sử giao dịch có thể kiểm toán.
+- Trong room, host P2P kiểm tra và thực thi giao dịch; mọi peer đều phải hiểu host có thể bị sửa đổi.
+- Không xem localStorage hay host peer là kho dữ liệu tin cậy hoặc có thể kiểm toán.
 - Không cho số dư âm.
-- Mỗi request mua phải có idempotency key để tránh trừ tiền hai lần.
-- Giá và nội dung vật phẩm lấy từ catalog server.
+- Mỗi thao tác mua phải từ catalog dùng chung và không nhận giá do client gửi.
+- Phòng hiện tại không có ledger/idempotency key bền vững; retry sau khi host thay đổi có thể tạo trạng thái không đồng nhất.
 - Không bán vật phẩm tạo lợi thế cạnh tranh trong ghép cặp hoặc gameplay xã hội.
 - Hiển thị rõ giá, điều kiện và nội dung vật phẩm.
 
@@ -121,21 +134,14 @@ interface InventoryItem {
 }
 ```
 
-Trong database cần unique constraint cho idempotency key theo user, foreign keys và transaction DB khi mua vật phẩm.
+Các constraint database chỉ áp dụng nếu về sau dự án bổ sung backend; chúng không mô tả kiến trúc hiện tại.
 
-## 5. API gợi ý
+## 5. Đồng bộ P2P (thay cho API backend)
 
-- `GET /wallet`
-- `GET /wallet/transactions`
-- `GET /shop/items`
-- `POST /shop/purchase`
-- `GET /inventory`
-- `POST /inventory/equip`
-- `POST /inventory/unequip`
-- `GET /profile/loadout`
-- `PUT /profile/loadout`
-
-Endpoint purchase phải đọc giá từ database, kiểm tra số dư, tạo giao dịch và ghi inventory trong một transaction.
+- Catalog nằm trong `packages/shared`; client chỉ gửi `SHOP_PURCHASE { itemId }` hoặc `SHOP_EQUIP { itemId }`.
+- Host đọc giá từ catalog, kiểm tra số dư/quyền sở hữu, cập nhật wallet và inventory trong state room rồi broadcast snapshot.
+- Snapshot room chứa số dư và danh sách item đã sở hữu/trang bị để peer render cùng appearance.
+- Khi rời room, tài khoản demo lưu số dư và inventory vào localStorage trên trình duyệt đó. Đây là lưu cục bộ, không đồng bộ tài khoản giữa thiết bị.
 
 ## 6. Asset pipeline 3D
 
@@ -158,59 +164,45 @@ Endpoint purchase phải đọc giá từ database, kiểm tra số dư, tạo g
 - Save/cancel loadout.
 - Thông báo mua thành công/thất bại rõ ràng.
 
-## 8. Cấu trúc code gợi ý
+## 8. Cấu trúc code hiện tại
 
 ```text
-apps/
-  web/src/features/
-    wallet/
-    shop/
-    inventory/
-    customization/
-    rewards/
-  server/src/
-    economy/
-    wallet/
-    catalog/
-    purchases/
-    inventory/
-    rewards/
-    admin-catalog/
+packages/shared/src/index.ts       # catalog và DTO đồng bộ
+src/services/p2pBusNetwork.ts      # xử lý SHOP_PURCHASE/SHOP_EQUIP tại host
+src/stores/useMultiplayerStore.ts  # nối room state, ví và action UI
+src/components/hud/MultiplayerSocialHub.tsx # ví và giao diện shop
 ```
 
 ## 9. Thứ tự triển khai
 
-1. Chốt loại tiền ảo và nguồn phát hành coin.
-2. Xây wallet ledger và lịch sử giao dịch.
-3. Xây catalog item.
-4. Xây inventory.
-5. Xây mua vật phẩm bằng transaction an toàn.
-6. Xây preview và trang bị avatar.
-7. Đồng bộ loadout cho người chơi khác.
-8. Xây reward giới hạn và chống farm.
-9. Xây công cụ admin có audit log.
-10. Kiểm thử race condition, retry, double purchase và số dư.
+1. Chốt rõ đây là coin demo cục bộ, không có giá trị tiền mặt.
+2. Xây catalog dùng chung và action mua/trang bị/tháo.
+3. Để host kiểm tra giá, số dư và quyền sở hữu trong room.
+4. Đồng bộ wallet, inventory và appearance cho các peer.
+5. Lưu số dư/inventory về localStorage sau khi nhận room snapshot.
+6. Các tính năng ledger, reward, admin và chống gian lận chỉ triển khai nếu sau này có authority tin cậy hoặc thiết kế phù hợp P2P.
 
 ## 10. Tiêu chí nghiệm thu
 
-- [ ] Có ví và lịch sử giao dịch.
-- [ ] Coin chỉ thay đổi từ server.
-- [ ] Mua hàng không thể trừ tiền hai lần khi retry.
-- [ ] Không thể mua khi thiếu tiền hoặc item không còn bán.
-- [ ] Mua thành công tạo inventory đúng một lần.
-- [ ] Trang bị/tháo item hoạt động.
-- [ ] Người chơi khác nhìn thấy loadout đã đồng bộ.
+- [x] Có ví và catalog shop trong room.
+- [ ] Có lịch sử giao dịch/ledger.
+- [ ] Coin được kiểm tra bởi authority tin cậy (hiện tại host P2P chỉ là authority theo phiên).
+- [ ] Mua hàng có idempotency bền vững khi retry hoặc đổi host.
+- [x] Không thể mua khi thiếu tiền hoặc item đã sở hữu; catalog hiện tại là tĩnh.
+- [x] Mua thành công thêm item vào inventory trong state room.
+- [x] Trang bị/tháo avatar hoặc màu áo hoạt động.
+- [x] Người chơi khác nhìn thấy appearance đã đồng bộ.
 - [ ] Asset có fallback và không làm crash scene.
 - [ ] Reward có giới hạn và chống farm cơ bản.
 - [ ] Admin action có phân quyền và audit log.
-- [ ] Có test cho giao dịch đồng thời và lỗi database.
+- [ ] Có kiểm thử giao dịch đồng thời/retry khi bổ sung persistence tin cậy.
 
 ## 11. Prompt giao cho AI code
 
-Hãy triển khai Phase 6 của Roadmate dựa trên codebase hiện tại. Trước khi code, kiểm tra hệ thống profile, avatar, database và asset pipeline; tái sử dụng các module có sẵn.
+Đối với phần mở rộng Phase 6 của Virtual Bus, trước tiên kiểm tra profile, avatar, asset pipeline và kiến trúc frontend-only hiện có; không tạo backend hoặc Socket.IO.
 
-Bắt đầu bằng wallet ledger, catalog, inventory và mua vật phẩm bằng coin nội bộ. Tất cả giá, số dư và giao dịch phải do server quyết định. Dùng transaction database và idempotency key để chống double purchase. Không tin giá hoặc số dư do client gửi.
+Tiếp tục từ MVP shop P2P: catalog tĩnh dùng chung, host xác thực giá/số dư/quyền sở hữu trong room, đồng bộ inventory và appearance. Ghi rõ host không phải authority bảo mật, localStorage không chia sẻ giữa thiết bị, và chưa có ledger/idempotency bền vững.
 
-Sau đó tích hợp preview/trang bị trang phục 3D và đồng bộ loadout. Chỉ thêm phần thưởng có giới hạn, có chống farm. Chưa tích hợp thanh toán tiền thật, marketplace hay loot box.
+Sau đó mới mở rộng preview/trang bị 3D nếu asset pipeline hỗ trợ. Không thêm phần thưởng có thể farm hoặc giả lập bảo mật server. Không tích hợp thanh toán tiền thật, marketplace hay loot box.
 
-Viết test cho mua đồng thời, retry, thiếu tiền, item ngừng bán và asset lỗi. Chạy migration, typecheck, test và build sau từng module. Cập nhật README và báo cáo.
+Chạy lint và build theo hướng dẫn repository, cập nhật README và báo cáo giới hạn P2P. Chỉ thêm test khi được yêu cầu.
