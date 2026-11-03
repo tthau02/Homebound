@@ -232,14 +232,14 @@ export const CharacterController: React.FC = () => {
       const rawNextX = player.position[0] + dirX * speed * delta;
       const rawNextZ = player.position[2] + dirZ * speed * delta;
 
-      const clampedX = Math.max(
-        AISLE_BOUNDS.minX,
-        Math.min(AISLE_BOUNDS.maxX, rawNextX)
-      );
-      const clampedZ = Math.max(
-        AISLE_BOUNDS.minZ,
-        Math.min(AISLE_BOUNDS.maxZ, rawNextZ)
-      );
+      const isDisembarked =
+        useMultiplayerStore.getState().currentRoom?.players[player.id]
+          ?.isDisembarked ?? false;
+      const bounds = isDisembarked
+        ? { minX: 2.2, maxX: 13.5, minZ: -5.5, maxZ: 5.5 }
+        : AISLE_BOUNDS;
+      const clampedX = Math.max(bounds.minX, Math.min(bounds.maxX, rawNextX));
+      const clampedZ = Math.max(bounds.minZ, Math.min(bounds.maxZ, rawNextZ));
 
       const targetYaw = Math.atan2(-dirX, -dirZ);
 

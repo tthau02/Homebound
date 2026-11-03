@@ -4,6 +4,7 @@ import { useSeatStore } from '../../stores/useSeatStore';
 import { useCharacterStore } from '../../stores/useCharacterStore';
 import { useInteractionStore } from '../../stores/useInteractionStore';
 import { BusSeat } from '../bus/BusSeat';
+import { useMultiplayerStore } from '../../stores/useMultiplayerStore';
 
 export const SeatManager: React.FC = () => {
   const seats = useSeatStore((state) => state.seats);
@@ -24,6 +25,11 @@ export const SeatManager: React.FC = () => {
     if (!seat) return;
 
     const playerId = charStore.playerId;
+    const room = useMultiplayerStore.getState().currentRoom;
+    if (room?.players[playerId]?.isDisembarked) {
+      interStore.showStatusToast('Bạn đang ở khu vực trạm. Hãy quay lại xe để chọn ghế.');
+      return;
+    }
 
     // Prevent occupying a seat that already has another passenger
     if (seat.occupied && seat.occupantId !== playerId) {

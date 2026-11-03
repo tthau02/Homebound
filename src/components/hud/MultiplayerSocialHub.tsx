@@ -1,6 +1,8 @@
 import React, { useState } from 'react';
 import {
+  Check,
   CheckCircle2,
+  Copy,
   CreditCard,
   LogOut,
   MapPin,
@@ -19,6 +21,7 @@ import { useMultiplayerStore } from '../../stores/useMultiplayerStore';
 
 export const MultiplayerSocialHub: React.FC = () => {
   const isOnlineMode = useMultiplayerStore((state) => state.isOnlineMode);
+  const isHostPeer = useMultiplayerStore((state) => state.isHostPeer);
   const currentRoom = useMultiplayerStore((state) => state.currentRoom);
   const user = useMultiplayerStore((state) => state.user);
   const isSocialPanelOpen = useMultiplayerStore(
@@ -48,12 +51,15 @@ export const MultiplayerSocialHub: React.FC = () => {
     (state) => state.emitMusicControl
   );
   const emitRoleAssign = useMultiplayerStore((state) => state.emitRoleAssign);
+  const emitDisembark = useMultiplayerStore((state) => state.emitDisembark);
+  const emitReturnToBus = useMultiplayerStore((state) => state.emitReturnToBus);
   const leaveCurrentRoom = useMultiplayerStore(
     (state) => state.leaveCurrentRoom
   );
 
   const [chatText, setChatText] = useState('');
   const [announcementInput, setAnnouncementInput] = useState('');
+  const [copiedRoomCode, setCopiedRoomCode] = useState(false);
 
   if (!isOnlineMode || !currentRoom || !user) return null;
 
@@ -69,6 +75,12 @@ export const MultiplayerSocialHub: React.FC = () => {
     ] ?? DEFAULT_MUSIC_TRACKS[0];
 
   const myTicket = currentRoom.tickets[user.id];
+
+  const handleCopyRoomCode = () => {
+    navigator.clipboard?.writeText(currentRoom.roomId);
+    setCopiedRoomCode(true);
+    window.setTimeout(() => setCopiedRoomCode(false), 1800);
+  };
 
   const handleSendRoomChat = (e: React.FormEvent) => {
     e.preventDefault();
@@ -86,8 +98,22 @@ export const MultiplayerSocialHub: React.FC = () => {
 
   return (
     <div className="pointer-events-auto flex flex-col items-end gap-2">
-      {/* Toggle Pill */}
-      <div className="flex items-center gap-2">
+      {/* Toggle Pill & Shareable P2P Room Code */}
+      <div className="flex flex-wrap items-center gap-2">
+        <button
+          type="button"
+          onClick={handleCopyRoomCode}
+          title="Copy Mã chuyến xe để mời bạn bè kết nối P2P"
+          className="px-3 py-2 rounded-xl bg-amber-500/20 hover:bg-amber-500/30 border border-amber-400/50 text-amber-200 text-xs font-mono font-bold shadow-lg flex items-center gap-1.5"
+        >
+          <span>Mã P2P: {currentRoom.roomId}</span>
+          {copiedRoomCode ? (
+            <Check className="w-3.5 h-3.5 text-emerald-400" />
+          ) : (
+            <Copy className="w-3.5 h-3.5" />
+          )}
+        </button>
+
         <button
           type="button"
           onClick={() => setSocialPanelOpen(!isSocialPanelOpen)}
@@ -95,7 +121,7 @@ export const MultiplayerSocialHub: React.FC = () => {
         >
           <span className="w-2 h-2 rounded-full bg-white animate-ping" />
           <span>
-            Phòng Online: {currentRoom.name} ({myRole})
+            {isHostPeer ? 'Host P2P' : 'Peer P2P'}: {currentRoom.name} ({myRole})
           </span>
         </button>
 
@@ -262,6 +288,9 @@ export const MultiplayerSocialHub: React.FC = () => {
                   Trạng thái: <strong>{currentRoom.journey.status}</strong> • Tốc
                   độ: <strong>{currentRoom.journey.speedKmh} km/h</strong>
                 </p>
+                <p className="text-[11px] text-sky-200 mt-1">
+                  Thời tiết đồng bộ: <strong>{currentRoom.journey.weather === 'SUNNY' ? 'Nắng' : currentRoom.journey.weather === 'CLOUDY' ? 'Nhiều mây' : 'Mưa nhẹ'}</strong>
+                </p>
               </div>
 
               {/* Stops Timeline */}
@@ -297,6 +326,36 @@ export const MultiplayerSocialHub: React.FC = () => {
                 })}
               </div>
 
+              {currentRoom.journey.status === 'AT_STOP' && selfPlayer && (
+                <div className="rounded-xl border border-emerald-700/60 bg-emerald-950/40 p-2.5 space-y-2">
+                  <p className="font-bold text-emerald-300">
+                    Hoạt động tại {currentRoom.route.stops[currentRoom.journey.currentStopOrder]?.name ?? 'trạm dừng'}
+                  </p>
+                  {selfPlayer.isDisembarked ? (
+                    <>
+                      <p className="text-[11px] text-emerald-100/80">
+                        Đi bộ bằng WASD quanh khu vực trạm. Chạm khung ảnh màu vàng để check-in nhóm.
+                      </p>
+                      <button
+                        type="button"
+                        onClick={emitReturnToBus}
+                        className="w-full rounded-lg bg-sky-600 px-3 py-2 font-bold text-white hover:bg-sky-500"
+                      >
+                        🚌 Quay lại xe
+                      </button>
+                    </>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={emitDisembark}
+                      className="w-full rounded-lg bg-emerald-600 px-3 py-2 font-bold text-white hover:bg-emerald-500"
+                    >
+                      🚶 Xuống xe khám phá trạm
+                    </button>
+                  )}
+                </div>
+              )}
+
               {/* Driver & Assistant Controls */}
               {isStaff ? (
                 <div className="pt-2 border-t border-slate-800 space-y-2">
@@ -331,6 +390,20 @@ export const MultiplayerSocialHub: React.FC = () => {
                       className="py-1.5 px-2 rounded-lg bg-rose-700 hover:bg-rose-600 text-white font-semibold"
                     >
                       🏁 Kết thúc chuyến
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const nextWeather = currentRoom.journey.weather === 'SUNNY'
+                          ? 'CLOUDY'
+                          : currentRoom.journey.weather === 'CLOUDY'
+                            ? 'RAINY'
+                            : 'SUNNY';
+                        emitJourneyControl('SET_WEATHER', undefined, nextWeather);
+                      }}
+                      className="py-1.5 px-2 rounded-lg bg-indigo-700 hover:bg-indigo-600 text-white font-semibold"
+                    >
+                      🌦️ Đổi thời tiết
                     </button>
                   </div>
 

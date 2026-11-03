@@ -60,11 +60,11 @@ interface RouteStop {
 }
 ```
 
-### 3.2 Journey State
-- Server là nguồn dữ liệu chuẩn cho trạng thái chuyến xe.
-- Client hiển thị trạng thái được server phát.
-- Đồng bộ thời điểm khởi hành, trạm hiện tại và thời gian dừng.
-- Không để mỗi client tự quyết định xe đã đến trạm hay chưa.
+### 3.2 Journey State (P2P)
+- Peer host của phòng là nguồn dữ liệu chuẩn cho trạng thái chuyến xe; các peer khác không tự quyết định xe đã đến trạm.
+- Host kiểm tra vai trò tài xế/phụ xe, cập nhật trạm hiện tại và phát room snapshot qua PeerJS/WebRTC.
+- Đồng bộ trạng thái hành trình, thời tiết và thời điểm cập nhật trong snapshot.
+- Nếu host rời phòng, cần thông báo rõ trạng thái kết nối; không giả vờ có backend để khôi phục room authoritative.
 
 ### 3.3 Environment
 - Tạo các đoạn đường tái sử dụng.
@@ -92,7 +92,7 @@ Hoạt động phải có tương tác rõ ràng, không chỉ là vật thể t
 - Day/night theo thời gian của chuyến hoặc cấu hình phòng.
 - Thời tiết MVP: nắng, nhiều mây, mưa nhẹ.
 - Thời tiết ảnh hưởng ánh sáng/âm thanh/hiệu ứng, không làm giảm hiệu năng quá mức.
-- Đồng bộ seed và trạng thái thời tiết qua server để mọi người thấy giống nhau.
+- Host chọn trạng thái thời tiết và phát trong room snapshot để mọi peer nhìn thấy giống nhau.
 
 ## 4. UI/UX
 - Route progress: điểm đi, trạm hiện tại, trạm kế tiếp, điểm đến.
@@ -105,63 +105,31 @@ Hoạt động phải có tương tác rõ ràng, không chỉ là vật thể t
 ## 5. Kiến trúc và cấu trúc code gợi ý
 
 ```text
-apps/
-  web/src/
-    game/
-      world/
-        WorldManager.tsx
-        SegmentLoader.tsx
-        EnvironmentChunk.tsx
-      routes/
-        RouteRenderer.tsx
-        WaypointPath.ts
-        RouteConfig.ts
-      stops/
-        StopScene.tsx
-        StopInteraction.tsx
-        BoardingZone.tsx
-      weather/
-        WeatherController.tsx
-        DayNightController.tsx
-    features/
-      journey/
-        JourneyHUD.tsx
-        StopAnnouncement.tsx
-        journeyStore.ts
-  server/src/
-    routes/
-    journeys/
-    stops/
+src/
+  game/
+    environment/StopArea.tsx
+    environment/WeatherEffects.tsx
+    config/environmentConfig.ts
+  stores/useMultiplayerStore.ts
+  services/p2pBusNetwork.ts
+packages/shared/src/index.ts
 ```
 
 ## 6. API và realtime events gợi ý
 
-REST:
-- `GET /routes`
-- `GET /routes/:id`
-- `GET /journeys/:id`
+Room data lấy từ cấu hình tuyến frontend. Các peer gửi action packet qua PeerJS/WebRTC; host kiểm tra quyền và điều kiện chuyến xe rồi broadcast room snapshot. BroadcastChannel chỉ hỗ trợ các tab cùng origin, không thay signaling/WebRTC giữa các thiết bị.
 
-Socket:
-- `journey:state`
-- `journey:stop-announced`
-- `journey:stop-arrived`
-- `journey:boarding-opened`
-- `journey:boarding-closed`
-- `player:board`
-- `player:disembark`
-- `player:return-to-bus`
-
-Tất cả thao tác lên/xuống xe phải được xác thực ở server.
+Action packet tối thiểu: `JOURNEY` (start/pause/next-stop/weather), `DISEMBARK`, `RETURN_TO_BUS`, `MOVE` và `CHAT`. Host chỉ chấp nhận xuống xe khi journey ở trạng thái `AT_STOP`; khi chuyến chạy lại, host đưa người chơi còn ở trạm về xe.
 
 ## 7. Thứ tự triển khai
 
 1. Kiểm tra lại route/journey/room hiện có ở Phase 3.
-2. Chuẩn hóa mô hình Route, Stop, Journey.
-3. Làm một tuyến mẫu với 3–4 trạm.
+2. Chuẩn hóa mô hình Route, Stop, Journey trong shared frontend package.
+3. Dùng route mẫu hiện có với các trạm và room state P2P.
 4. Xây waypoint và chuyển động giữa các đoạn đường.
 5. Xây một scene trạm nghỉ có thể xuống xe.
-6. Đồng bộ trạng thái trạm qua Socket.IO.
-7. Thêm 2 hoạt động tại trạm.
+6. Đồng bộ trạng thái trạm qua PeerJS/WebRTC, với host room làm nguồn chuẩn.
+7. Thêm hoạt động đi bộ và check-in tại trạm.
 8. Thêm route HUD và thông báo.
 9. Thêm ngày/đêm và thời tiết cơ bản.
 10. Tối ưu tải asset và kiểm thử nhiều người chơi.
@@ -169,7 +137,7 @@ Tất cả thao tác lên/xuống xe phải được xác thực ở server.
 ## 8. Tiêu chí nghiệm thu
 
 - [ ] Có ít nhất một tuyến hoàn chỉnh với 3–4 trạm.
-- [ ] Trạng thái chuyến xe được server quản lý.
+- [ ] Trạng thái chuyến xe được host P2P quản lý.
 - [ ] Tất cả client trong phòng thấy cùng trạm và trạng thái hành trình.
 - [ ] Xe dừng đúng waypoint và tiếp tục đúng thứ tự.
 - [ ] Người chơi có thể xuống xe và quay lại xe.
@@ -186,6 +154,6 @@ Bạn là Senior Game Developer. Hãy triển khai Phase 4 của Roadmate theo t
 
 Trước tiên kiểm tra code Phase 1–3, xác định module nào đã có và đề xuất kế hoạch tích hợp. Không tạo lại dự án, không thay thế công nghệ hiện tại nếu không có lý do kỹ thuật rõ ràng.
 
-Triển khai từng task nhỏ, bắt đầu bằng một tuyến mẫu có 3–4 trạm và một trạm nghỉ có thể xuống xe. Server phải là nguồn dữ liệu chuẩn cho trạng thái hành trình và quyền lên/xuống xe. Không làm nhiều bản đồ trước khi tuyến mẫu hoạt động ổn định.
+Triển khai từng task nhỏ trên frontend hiện tại, dùng tuyến mẫu có các trạm và khu vực dừng có thể xuống xe. Peer host phải là nguồn dữ liệu chuẩn cho trạng thái hành trình và quyền lên/xuống xe. Không thêm backend hoặc Socket.IO; không làm nhiều bản đồ trước khi tuyến mẫu hoạt động ổn định.
 
 Sau mỗi task, chạy typecheck, test phù hợp và build; sửa lỗi trước khi tiếp tục. Không đánh dấu tiêu chí nghiệm thu là hoàn thành nếu chưa kiểm thử được. Cập nhật README và báo cáo file đã thay đổi, cách chạy và phần còn thiếu.
