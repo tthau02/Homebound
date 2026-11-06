@@ -9,6 +9,7 @@ import { MultiplayerLobbyModal } from './MultiplayerLobbyModal';
 import { MultiplayerSocialHub } from './MultiplayerSocialHub';
 import { PlayerGuideHub } from './PlayerGuideHub';
 import { LiveOpsFloatingDock } from './LiveOpsFloatingDock';
+import { JourneyCompletionModal } from './JourneyCompletionModal';
 
 export const GameHud: React.FC = () => {
   return (
@@ -33,6 +34,7 @@ export const GameHud: React.FC = () => {
       {/* Multiplayer Auth & Room Lobby Modal */}
       <MultiplayerLobbyModal />
       <PlayerGuideHub />
+      <JourneyCompletionModal />
 
       {/* Bottom Area: Player Chat/Emote/Movement Controls + Vehicle Telemetry Bar */}
       <footer className="w-full flex flex-col items-center">

@@ -2,6 +2,7 @@ import React, { useRef } from 'react';
 import { useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
 import { useGameStore } from '../../stores/useGameStore';
+import { useJourneyStore } from '../../stores/useJourneyStore';
 import { BUS_DIMENSIONS } from '../config/busConfig';
 
 interface UseBusAnimationParams {
@@ -32,6 +33,9 @@ export const useBusAnimation = ({ bodyGroupRef, wheelRefs }: UseBusAnimationPara
     const delta = Math.min(rawDelta, 0.1);
     const speedMs = (state.busSpeedKmh * 1000) / 3600;
     const speedFactor = Math.min(1.2, state.busSpeedKmh / 65);
+
+    // Update journey progress & stations
+    useJourneyStore.getState().tickJourney(delta);
 
     phaseRef.current += delta * (1.8 + speedFactor * 2.4);
     const t = phaseRef.current;

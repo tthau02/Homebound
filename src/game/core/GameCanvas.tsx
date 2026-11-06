@@ -1,5 +1,6 @@
 import React, { Suspense } from 'react';
 import { Canvas } from '@react-three/fiber';
+import * as THREE from 'three';
 import { useGameStore } from '../../stores/useGameStore';
 import { GameWorld } from './GameWorld';
 import { PerformanceProbe3D } from './PerformanceProbe3D';
@@ -20,7 +21,7 @@ export const GameCanvas: React.FC = () => {
   return (
     <div className="w-full h-full relative">
       <Canvas
-        shadows={enableShadows}
+        shadows={enableShadows ? 'soft' : false}
         dpr={dpr}
         camera={{
           position: CAMERA_PRESETS.interior.position,
@@ -31,6 +32,15 @@ export const GameCanvas: React.FC = () => {
         gl={{
           antialias: graphicsQuality !== 'low',
           powerPreference: 'high-performance',
+          toneMapping: THREE.ACESFilmicToneMapping,
+          toneMappingExposure: 1.25,
+        }}
+        onCreated={({ gl }) => {
+          gl.toneMapping = THREE.ACESFilmicToneMapping;
+          gl.toneMappingExposure = 1.25;
+          if (enableShadows) {
+            gl.shadowMap.type = THREE.PCFSoftShadowMap;
+          }
         }}
       >
         <Suspense fallback={null}>
@@ -41,4 +51,3 @@ export const GameCanvas: React.FC = () => {
     </div>
   );
 };
-

@@ -1,18 +1,20 @@
 import React, { useEffect, useRef } from 'react';
 import { useFrame } from '@react-three/fiber';
+import * as THREE from 'three';
 import { useCharacterStore } from '../../stores/useCharacterStore';
 import { useInteractionStore } from '../../stores/useInteractionStore';
 import { useChatStore } from '../../stores/useChatStore';
 import { useMultiplayerStore } from '../../stores/useMultiplayerStore';
 import { useGameStore } from '../../stores/useGameStore';
+import { useJourneyStore } from '../../stores/useJourneyStore';
 import { BUS_DIMENSIONS } from '../config/busConfig';
 import { EMOTE_DEFINITIONS } from './characterTypes';
 
-const WALK_SPEED = 1.45;
-const FAST_WALK_SPEED = 2.4;
+const WALK_SPEED = 1.6;
+const FAST_WALK_SPEED = 2.6;
 const AUTO_WALK_SPEED = 1.95;
 
-// Walkable central aisle bounds so character never clips into seats, walls, or doors
+// Walkable central aisle bounds inside the coach bus
 const AISLE_BOUNDS = {
   minX: -0.22,
   maxX: 0.22,
@@ -62,7 +64,7 @@ export const CharacterController: React.FC = () => {
         keysPressedRef.current.shift = true;
       }
 
-      // Space: Stand up when sitting
+      // Space: Stand up when sitting, or Board bus when near door
       if (code === 'Space') {
         e.preventDefault();
         const charStore = useCharacterStore.getState();
@@ -76,11 +78,21 @@ export const CharacterController: React.FC = () => {
         }
       }
 
-      // E: Interact with nearest passenger
+      // E: Interact with nearest passenger or station stall
       if (code === 'KeyE' || key === 'e') {
         e.preventDefault();
-        const interStore = useInteractionStore.getState();
         const charStore = useCharacterStore.getState();
+        const player = charStore.characters[charStore.playerId];
+        if (!player) return;
+
+        // Check if player is near sugarcane juice cart at station (x ~ 4.6, z ~ -1.8)
+        const distToStall = Math.hypot(player.position[0] - 4.6, player.position[2] - (-1.8));
+        if (distToStall < 2.8) {
+          useJourneyStore.getState().interactWithStationStall();
+          return;
+        }
+
+        const interStore = useInteractionStore.getState();
         const nearestId = interStore.nearestInteractableNpcId;
 
         if (nearestId && charStore.characters[nearestId]) {
@@ -96,7 +108,7 @@ export const CharacterController: React.FC = () => {
             );
         } else {
           interStore.showStatusToast(
-            'Hãy lại gần một hành khách hoặc click vào họ để tương tác!'
+            'Hãy lại gần hành khách hoặc quán nước để tương tác!'
           );
         }
       }
@@ -228,7 +240,7 @@ export const CharacterController: React.FC = () => {
       return;
     }
 
-    // 5. Handle Manual Keyboard / Mobile Movement inside Aisle Bounds
+    // 5. Handle Manual Keyboard / Mobile Movement inside Bus or Outside at Station
     if (hasManualInput) {
       const len = Math.hypot(moveXInput, moveZInput);
       const dirX = moveXInput / len;
@@ -238,32 +250,79 @@ export const CharacterController: React.FC = () => {
       const rawNextX = player.position[0] + dirX * speed * delta;
       const rawNextZ = player.position[2] + dirZ * speed * delta;
 
-      const isDisembarked =
-        useMultiplayerStore.getState().currentRoom?.players[player.id]
-          ?.isDisembarked ?? false;
-      const bounds = isDisembarked
-        ? { minX: 2.2, maxX: 13.5, minZ: -5.5, maxZ: 5.5 }
-        : AISLE_BOUNDS;
-      const clampedX = Math.max(bounds.minX, Math.min(bounds.maxX, rawNextX));
-      const clampedZ = Math.max(bounds.minZ, Math.min(bounds.maxZ, rawNextZ));
+      const journey = useJourneyStore.getState();
+      const isDisembarked = journey.isPlayerDisembarked || player.position[0] > 1.35;
+      const isDoorOpen = journey.doorOpen;
+
+      let nextX = player.position[0];
+      let nextY: number = BUS_DIMENSIONS.floorY;
+      let nextZ = player.position[2];
+
+      if (isDisembarked) {
+        // Player is outside on the station platform
+        const nearDoorZ = rawNextZ >= -5.35 && rawNextZ <= -4.15;
+        // Step back through the open bus door
+        if (nearDoorZ && rawNextX < 1.45 && isDoorOpen) {
+          nextX = rawNextX;
+          nextZ = rawNextZ;
+          const stairT = Math.max(0, Math.min(1, (1.45 - rawNextX) / 1.15));
+          nextY = THREE.MathUtils.lerp(0.22, BUS_DIMENSIONS.floorY, stairT);
+
+          if (rawNextX <= 0.22) {
+            useJourneyStore.setState({ isPlayerDisembarked: false });
+            nextX = Math.max(AISLE_BOUNDS.minX, Math.min(AISLE_BOUNDS.maxX, rawNextX));
+            nextY = BUS_DIMENSIONS.floorY;
+          }
+        } else {
+          // Walking freely around the station platform
+          nextX = Math.max(1.45, Math.min(14.5, rawNextX));
+          nextZ = Math.max(-13.5, Math.min(13.5, rawNextZ));
+          nextY = 0.22;
+        }
+      } else {
+        // Player is inside the bus
+        const nearDoorZ = rawNextZ >= -5.35 && rawNextZ <= -4.15;
+        // If bus door is open and player is walking toward the door on the right
+        if (nearDoorZ && isDoorOpen && rawNextX > 0.15) {
+          nextX = rawNextX;
+          nextZ = rawNextZ;
+          if (nextX > 0.3) {
+            const stairT = Math.max(0, Math.min(1, (nextX - 0.3) / 1.1));
+            nextY = THREE.MathUtils.lerp(BUS_DIMENSIONS.floorY, 0.22, stairT);
+          }
+          if (nextX >= 1.4) {
+            useJourneyStore.setState({ isPlayerDisembarked: true });
+            nextY = 0.22;
+          }
+        } else {
+          // Inside standard central aisle bounds
+          nextX = Math.max(AISLE_BOUNDS.minX, Math.min(AISLE_BOUNDS.maxX, rawNextX));
+          nextZ = Math.max(AISLE_BOUNDS.minZ, Math.min(AISLE_BOUNDS.maxZ, rawNextZ));
+          nextY = BUS_DIMENSIONS.floorY;
+        }
+      }
 
       const targetYaw = Math.atan2(-dirX, -dirZ);
 
       charStore.updateCharacterTransform(
         player.id,
-        [clampedX, BUS_DIMENSIONS.floorY, clampedZ],
+        [nextX, nextY, nextZ],
         targetYaw
       );
       charStore.setCharacterStateAndAnimation(
         player.id,
         'walking',
         'Walking',
-        keys.shift ? 'Đang đi nhanh trên lối đi' : 'Đang đi dọc lối đi'
+        isDisembarked
+          ? 'Đang đi dạo trên sân ga bến xe'
+          : keys.shift
+            ? 'Đang đi nhanh trên lối đi'
+            : 'Đang đi dọc lối đi'
       );
       useMultiplayerStore
         .getState()
         .emitMoveThrottled(
-          [clampedX, BUS_DIMENSIONS.floorY, clampedZ],
+          [nextX, nextY, nextZ],
           targetYaw,
           'walking',
           'Walking'
@@ -273,11 +332,14 @@ export const CharacterController: React.FC = () => {
       const idleAnim = player.activeEmote
         ? EMOTE_DEFINITIONS[player.activeEmote].animation
         : 'Idle';
+      const isDisembarked = useJourneyStore.getState().isPlayerDisembarked || player.position[0] > 1.35;
       charStore.setCharacterStateAndAnimation(
         player.id,
         'idle',
         idleAnim,
-        'Đang đứng ở lối đi giữa xe'
+        isDisembarked
+          ? 'Đang đứng tại sảnh trạm dừng xe'
+          : 'Đang đứng ở lối đi giữa xe'
       );
       useMultiplayerStore
         .getState()

@@ -1,5 +1,5 @@
 import React from 'react';
-import { BUS_COLORS, BUS_DIMENSIONS } from '../config/busConfig';
+import { BUS_DIMENSIONS } from '../config/busConfig';
 
 export const DriverCabin: React.FC = () => {
   const floorY = BUS_DIMENSIONS.floorY;
@@ -17,13 +17,13 @@ export const DriverCabin: React.FC = () => {
         {/* Main Left & Center Dashboard Body */}
         <mesh position={[-0.32, 0.52, 0]} castShadow receiveShadow>
           <boxGeometry args={[1.92, 0.68, 0.58]} />
-          <meshStandardMaterial color={BUS_COLORS.dashboardDark} roughness={0.6} metalness={0.2} />
+          <meshStandardMaterial color="#09090b" roughness={0.5} metalness={0.25} />
         </mesh>
 
         {/* Dashboard Upper Hood over Instrument Cluster */}
         <mesh position={[-0.72, 0.91, 0.05]} castShadow>
           <boxGeometry args={[0.72, 0.14, 0.42]} />
-          <meshStandardMaterial color="#09090b" roughness={0.5} />
+          <meshStandardMaterial color="#09090b" roughness={0.4} />
         </mesh>
 
         {/* Glowing Digital Instrument Cluster (Speedometer & RPM) */}
@@ -47,7 +47,7 @@ export const DriverCabin: React.FC = () => {
           <meshStandardMaterial
             color="#10b981"
             emissive="#059669"
-            emissiveIntensity={1.1}
+            emissiveIntensity={1.2}
             roughness={0.2}
           />
         </mesh>
@@ -57,12 +57,12 @@ export const DriverCabin: React.FC = () => {
           {/* Column Shaft */}
           <mesh position={[0, -0.14, 0]}>
             <cylinderGeometry args={[0.045, 0.055, 0.34, 12]} />
-            <meshStandardMaterial color="#27272a" metalness={0.5} roughness={0.4} />
+            <meshStandardMaterial color="#27272a" metalness={0.6} roughness={0.35} />
           </mesh>
           {/* Steering Wheel Rim */}
           <mesh rotation={[Math.PI / 2, 0, 0]} castShadow>
             <torusGeometry args={[0.22, 0.024, 12, 28]} />
-            <meshStandardMaterial color="#18181b" roughness={0.4} metalness={0.3} />
+            <meshStandardMaterial color="#18181b" roughness={0.35} metalness={0.35} />
           </mesh>
           {/* Steering Center Hub */}
           <mesh>
@@ -93,37 +93,120 @@ export const DriverCabin: React.FC = () => {
         </mesh>
         {/* Driver Seat Base */}
         <mesh position={[0, 0.32, -0.02]} castShadow>
-          <boxGeometry args={[0.46, 0.11, 0.46]} />
-          <meshStandardMaterial color="#27272a" roughness={0.45} />
+          <boxGeometry args={[0.48, 0.11, 0.46]} />
+          <meshStandardMaterial color="#1c1917" roughness={0.45} />
         </mesh>
         {/* Driver Seat Backrest */}
         <mesh position={[0, 0.68, 0.18]} rotation={[-0.1, 0, 0]} castShadow>
           <boxGeometry args={[0.44, 0.68, 0.1]} />
-          <meshStandardMaterial color="#27272a" roughness={0.45} />
+          <meshStandardMaterial color="#1c1917" roughness={0.45} />
         </mesh>
         {/* Driver Headrest */}
         <mesh position={[0, 1.08, 0.21]} castShadow>
           <boxGeometry args={[0.28, 0.18, 0.09]} />
-          <meshStandardMaterial color={BUS_COLORS.seatLeatherMain} roughness={0.4} />
+          <meshStandardMaterial color="#9a5626" roughness={0.4} />
         </mesh>
 
-        {/* Driver Figure */}
-        <group position={[0, 0.37, 0]}>
-          {/* Driver Torso (White Uniform Shirt & Tie) */}
-          <mesh position={[0, 0.32, 0.03]} castShadow>
-            <boxGeometry args={[0.34, 0.46, 0.2]} />
-            <meshStandardMaterial color="#e2e8f0" roughness={0.5} />
+        {/* ==================== REALISTIC HUMAN DRIVER FIGURE ==================== */}
+        <group position={[0, 0.38, 0]}>
+          {/* Driver Dark Navy Uniform Pants / Lap */}
+          <mesh position={[0, 0.06, -0.06]} castShadow>
+            <boxGeometry args={[0.34, 0.14, 0.38]} />
+            <meshStandardMaterial color="#0f172a" roughness={0.7} />
           </mesh>
-          {/* Driver Head */}
-          <mesh position={[0, 0.69, 0.03]} castShadow>
-            <sphereGeometry args={[0.12, 16, 16]} />
-            <meshStandardMaterial color="#f1c27d" roughness={0.45} />
+
+          {/* Torso: Crisp Driver White Shirt with Epaulets & Tie */}
+          <group position={[0, 0.32, 0.02]}>
+            {/* Main Shirt Body */}
+            <mesh castShadow>
+              <boxGeometry args={[0.33, 0.42, 0.19]} />
+              <meshStandardMaterial color="#f8fafc" roughness={0.65} />
+            </mesh>
+            {/* Navy Uniform Tie */}
+            <mesh position={[0, 0.06, -0.1]}>
+              <boxGeometry args={[0.045, 0.24, 0.015]} />
+              <meshStandardMaterial color="#1e3a8a" roughness={0.5} />
+            </mesh>
+            {/* Gold Epaulets on Shoulders */}
+            <mesh position={[-0.15, 0.21, 0]}>
+              <boxGeometry args={[0.06, 0.015, 0.12]} />
+              <meshStandardMaterial color="#d97706" metalness={0.7} roughness={0.3} />
+            </mesh>
+            <mesh position={[0.15, 0.21, 0]}>
+              <boxGeometry args={[0.06, 0.015, 0.12]} />
+              <meshStandardMaterial color="#d97706" metalness={0.7} roughness={0.3} />
+            </mesh>
+            {/* Name Badge */}
+            <mesh position={[0.09, 0.12, -0.098]}>
+              <boxGeometry args={[0.06, 0.02, 0.008]} />
+              <meshStandardMaterial color="#0284c7" />
+            </mesh>
+          </group>
+
+          {/* Realistic Human Driver Arms Reaching Forward to Wheel */}
+          <group position={[-0.16, 0.46, 0.02]} rotation={[0.65, 0.25, 0]}>
+            <mesh position={[0, -0.16, 0]} castShadow>
+              <cylinderGeometry args={[0.04, 0.035, 0.32, 10]} />
+              <meshStandardMaterial color="#f8fafc" roughness={0.65} />
+            </mesh>
+            {/* Hand on Wheel */}
+            <mesh position={[0, -0.32, 0]}>
+              <sphereGeometry args={[0.038, 12, 12]} />
+              <meshStandardMaterial color="#f5d0a9" roughness={0.5} />
+            </mesh>
+          </group>
+
+          <group position={[0.16, 0.46, 0.02]} rotation={[0.65, -0.25, 0]}>
+            <mesh position={[0, -0.16, 0]} castShadow>
+              <cylinderGeometry args={[0.04, 0.035, 0.32, 10]} />
+              <meshStandardMaterial color="#f8fafc" roughness={0.65} />
+            </mesh>
+            {/* Hand on Wheel */}
+            <mesh position={[0, -0.32, 0]}>
+              <sphereGeometry args={[0.038, 12, 12]} />
+              <meshStandardMaterial color="#f5d0a9" roughness={0.5} />
+            </mesh>
+          </group>
+
+          {/* Neck */}
+          <mesh position={[0, 0.55, 0.02]}>
+            <cylinderGeometry args={[0.045, 0.052, 0.08, 12]} />
+            <meshStandardMaterial color="#f5d0a9" roughness={0.5} />
           </mesh>
-          {/* Driver Hair */}
-          <mesh position={[0, 0.73, 0.04]}>
-            <sphereGeometry args={[0.123, 16, 12, 0, Math.PI * 2, 0, Math.PI * 0.6]} />
-            <meshStandardMaterial color="#0f172a" roughness={0.8} />
-          </mesh>
+
+          {/* Driver Head & Professional Uniform Cap */}
+          <group position={[0, 0.69, 0.02]}>
+            {/* Head Core */}
+            <mesh castShadow>
+              <sphereGeometry args={[0.118, 18, 18]} />
+              <meshStandardMaterial color="#f5d0a9" roughness={0.48} />
+            </mesh>
+            {/* Eyes */}
+            <mesh position={[-0.038, 0.015, -0.106]}>
+              <sphereGeometry args={[0.014, 8, 8]} />
+              <meshBasicMaterial color="#0f172a" />
+            </mesh>
+            <mesh position={[0.038, 0.015, -0.106]}>
+              <sphereGeometry args={[0.014, 8, 8]} />
+              <meshBasicMaterial color="#0f172a" />
+            </mesh>
+
+            {/* Driver Uniform Cap (Crown) */}
+            <mesh position={[0, 0.07, 0.005]} castShadow>
+              <cylinderGeometry args={[0.13, 0.115, 0.075, 18]} />
+              <meshStandardMaterial color="#0f172a" roughness={0.5} />
+            </mesh>
+            {/* Gold Braid Band on Cap */}
+            <mesh position={[0, 0.045, -0.02]}>
+              <cylinderGeometry args={[0.122, 0.122, 0.018, 18]} />
+              <meshStandardMaterial color="#d97706" metalness={0.7} roughness={0.3} />
+            </mesh>
+            {/* Glossy Black Visor Peak */}
+            <mesh position={[0, 0.032, -0.115]} rotation={[0.3, 0, 0]}>
+              <boxGeometry args={[0.15, 0.015, 0.08]} />
+              <meshStandardMaterial color="#09090b" roughness={0.2} metalness={0.8} />
+            </mesh>
+          </group>
         </group>
       </group>
 
@@ -132,7 +215,7 @@ export const DriverCabin: React.FC = () => {
         {/* Lower Partition Panel */}
         <mesh position={[0, 0.48, 0]} castShadow receiveShadow>
           <boxGeometry args={[0.92, 0.96, 0.05]} />
-          <meshStandardMaterial color={BUS_COLORS.wallLowerPanel} roughness={0.5} />
+          <meshStandardMaterial color="#1e293b" roughness={0.5} />
         </mesh>
         {/* Tinted Glass Upper Partition */}
         <mesh position={[0, 1.24, 0]}>
@@ -149,7 +232,7 @@ export const DriverCabin: React.FC = () => {
         <mesh position={[0.45, 1.05, 0]} castShadow>
           <cylinderGeometry args={[0.022, 0.022, 2.1, 12]} />
           <meshStandardMaterial
-            color={BUS_COLORS.metalHandrail}
+            color="#cbd5e1"
             metalness={0.85}
             roughness={0.18}
           />
@@ -158,7 +241,7 @@ export const DriverCabin: React.FC = () => {
         <mesh position={[0, 0.98, 0]} rotation={[0, 0, Math.PI / 2]}>
           <cylinderGeometry args={[0.02, 0.02, 0.9, 12]} />
           <meshStandardMaterial
-            color={BUS_COLORS.metalHandrail}
+            color="#cbd5e1"
             metalness={0.85}
             roughness={0.18}
           />
@@ -169,20 +252,22 @@ export const DriverCabin: React.FC = () => {
       <group position={[0.78, 0, -4.02]}>
         <mesh position={[0, 0.48, 0]} castShadow receiveShadow>
           <boxGeometry args={[0.92, 0.96, 0.05]} />
-          <meshStandardMaterial color={BUS_COLORS.wallLowerPanel} roughness={0.5} />
+          <meshStandardMaterial color="#1e293b" roughness={0.5} />
+        </mesh>
+        <mesh position={[0, 1.24, 0]}>
+          <boxGeometry args={[0.86, 0.52, 0.025]} />
+          <meshPhysicalMaterial
+            color="#38bdf8"
+            transparent
+            opacity={0.28}
+            roughness={0.1}
+            metalness={0.1}
+          />
         </mesh>
         <mesh position={[-0.45, 1.05, 0]} castShadow>
           <cylinderGeometry args={[0.022, 0.022, 2.1, 12]} />
           <meshStandardMaterial
-            color={BUS_COLORS.metalHandrail}
-            metalness={0.85}
-            roughness={0.18}
-          />
-        </mesh>
-        <mesh position={[0, 0.98, 0]} rotation={[0, 0, Math.PI / 2]}>
-          <cylinderGeometry args={[0.02, 0.02, 0.9, 12]} />
-          <meshStandardMaterial
-            color={BUS_COLORS.metalHandrail}
+            color="#cbd5e1"
             metalness={0.85}
             roughness={0.18}
           />
@@ -191,4 +276,3 @@ export const DriverCabin: React.FC = () => {
     </group>
   );
 };
-

@@ -1,6 +1,7 @@
 import React from 'react';
 import { BUS_COLORS, BUS_DIMENSIONS } from '../config/busConfig';
 import { useGameStore } from '../../stores/useGameStore';
+import { useJourneyStore } from '../../stores/useJourneyStore';
 
 interface BusExteriorProps {
   cutawayRoof: boolean;
@@ -9,6 +10,7 @@ interface BusExteriorProps {
 export const BusExterior: React.FC<BusExteriorProps> = ({ cutawayRoof }) => {
   const timeOfDay = useGameStore((state) => state.timeOfDay);
   const headlightsOn = useGameStore((state) => state.headlightsOn);
+  const doorOpen = useJourneyStore((state) => state.doorOpen);
 
   const halfW = BUS_DIMENSIONS.width / 2;
   const halfL = BUS_DIMENSIONS.length / 2;
@@ -125,26 +127,28 @@ export const BusExterior: React.FC<BusExteriorProps> = ({ cutawayRoof }) => {
             <boxGeometry args={[0.06, 2.18, 0.06]} />
             <meshStandardMaterial color={BUS_COLORS.windowFrameMetal} metalness={0.7} roughness={0.3} />
           </mesh>
-          {/* Glass Entry Door Leaf */}
-          <mesh position={[0.01, 1.62, 0]}>
-            <boxGeometry args={[0.022, 2.1, 1.1]} />
-            <meshPhysicalMaterial
-              color="#7dd3fc"
-              transparent
-              opacity={0.32}
-              roughness={0.1}
-              metalness={0.15}
-            />
-          </mesh>
-          {/* Door Metallic Horizontal Handle Bar */}
-          <mesh position={[-0.03, 1.38, 0]} rotation={[Math.PI / 2, 0, 0]}>
-            <cylinderGeometry args={[0.016, 0.016, 0.96, 10]} />
-            <meshStandardMaterial
-              color={BUS_COLORS.metalHandrail}
-              metalness={0.85}
-              roughness={0.2}
-            />
-          </mesh>
+          {/* Glass Entry Door Leaf (Animated Sliding Open/Close) */}
+          <group position={[0.01, 1.62, doorOpen ? 1.05 : 0]}>
+            <mesh>
+              <boxGeometry args={[0.022, 2.1, 1.1]} />
+              <meshPhysicalMaterial
+                color="#7dd3fc"
+                transparent
+                opacity={0.32}
+                roughness={0.1}
+                metalness={0.15}
+              />
+            </mesh>
+            {/* Door Metallic Horizontal Handle Bar */}
+            <mesh position={[-0.03, -0.24, 0]} rotation={[Math.PI / 2, 0, 0]}>
+              <cylinderGeometry args={[0.016, 0.016, 0.96, 10]} />
+              <meshStandardMaterial
+                color={BUS_COLORS.metalHandrail}
+                metalness={0.85}
+                roughness={0.2}
+              />
+            </mesh>
+          </group>
           {/* Entry Stairwell Steps */}
           <mesh position={[-0.22, 0.52, 0]} receiveShadow>
             <boxGeometry args={[0.44, 0.06, 1.12]} />

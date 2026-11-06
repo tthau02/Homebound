@@ -179,21 +179,35 @@ export const CameraManager: React.FC = () => {
           focusedChar.position[2] - 0.4
         );
       } else {
-        // Follow player softly along the aisle while keeping cabin view clear in both landscape and portrait
-        const followOffset = isPortrait ? 3.15 : 2.6;
-        const followZ = playerChar
-          ? Math.min(5.6, Math.max(-0.6, playerChar.position[2] + followOffset))
-          : preset.position[2] + (isPortrait ? 0.45 : 0);
-        desiredPosRef.current.set(
-          preset.position[0] + busLiveOffset.xSway + yaw * 0.18,
-          (isPortrait ? 2.24 : preset.position[1]) + busLiveOffset.y * 0.85,
-          followZ
-        );
-        desiredTargetRef.current.set(
-          preset.target[0] + busLiveOffset.xSway - yaw * 4.5,
-          preset.target[1] + (isPortrait ? 0.12 : 0) + busLiveOffset.y * 0.65 + pitch * 2.4,
-          preset.target[2]
-        );
+        if (playerChar && playerChar.position[0] > 1.35) {
+          // Player is outside exploring the station platform -> smooth 3rd-person camera following player
+          desiredPosRef.current.set(
+            playerChar.position[0] - 2.8 - yaw * 1.5,
+            (isPortrait ? 2.5 : 2.2) + pitch * 1.2,
+            playerChar.position[2] + (isPortrait ? 3.4 : 2.8)
+          );
+          desiredTargetRef.current.set(
+            playerChar.position[0],
+            1.1,
+            playerChar.position[2]
+          );
+        } else {
+          // Follow player softly along the aisle while keeping cabin view clear in both landscape and portrait
+          const followOffset = isPortrait ? 3.15 : 2.6;
+          const followZ = playerChar
+            ? Math.min(5.6, Math.max(-0.6, playerChar.position[2] + followOffset))
+            : preset.position[2] + (isPortrait ? 0.45 : 0);
+          desiredPosRef.current.set(
+            preset.position[0] + busLiveOffset.xSway + yaw * 0.18,
+            (isPortrait ? 2.24 : preset.position[1]) + busLiveOffset.y * 0.85,
+            followZ
+          );
+          desiredTargetRef.current.set(
+            preset.target[0] + busLiveOffset.xSway - yaw * 4.5,
+            preset.target[1] + (isPortrait ? 0.12 : 0) + busLiveOffset.y * 0.65 + pitch * 2.4,
+            preset.target[2]
+          );
+        }
       }
     } else if (activeMode === 'top-down') {
       if (focusedChar) {

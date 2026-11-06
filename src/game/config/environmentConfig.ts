@@ -26,32 +26,31 @@ export const ENVIRONMENT_CONFIG = {
 
 export const LIGHTING_CONFIG = {
   day: {
-    skyBg: '#7dd3fc',
+    skyBg: '#38bdf8', // Vibrant tropical sunny cyan-blue sky
     fogColor: '#bae6fd',
-    fogNear: 45,
-    fogFar: 165,
-    ambientIntensity: 0.75,
-    ambientColor: '#f8fafc',
+    fogNear: 60,
+    fogFar: 220,
+    ambientIntensity: 0.95,
+    ambientColor: '#ffffff',
     hemiSkyColor: '#e0f2fe',
-    hemiGroundColor: '#4d7c0f',
-    hemiIntensity: 0.85,
-    sunColor: '#fffbeb',
-    sunIntensity: 2.2,
-    sunPosition: [28, 42, -24] as [number, number, number],
+    hemiGroundColor: '#84cc16', // Vibrant fresh grass bounce
+    hemiIntensity: 1.05,
+    sunColor: '#fffef0', // Radiant warm golden sunlight
+    sunIntensity: 2.85,
+    sunPosition: [28, 44, -22] as [number, number, number],
   },
   night: {
     skyBg: '#060b19',
     fogColor: '#091024',
-    fogNear: 28,
-    fogFar: 135,
-    ambientIntensity: 0.22,
+    fogNear: 35,
+    fogFar: 155,
+    ambientIntensity: 0.28,
     ambientColor: '#1e293b',
     hemiSkyColor: '#1e3a8a',
     hemiGroundColor: '#0f172a',
-    hemiIntensity: 0.35,
+    hemiIntensity: 0.4,
     sunColor: '#60a5fa',
-    sunIntensity: 0.35,
+    sunIntensity: 0.45,
     sunPosition: [-20, 35, -30] as [number, number, number],
   },
 } as const;
-
