@@ -30,6 +30,8 @@ interface GameState {
   routeName: string;
   journeyStatus: string;
   distanceTraveledKm: number;
+  isGuideOpen: boolean;
+  mobileMoveDir: 'forward' | 'backward' | null;
 
   // Actions
   setCameraMode: (mode: CameraMode) => void;
@@ -41,6 +43,8 @@ interface GameState {
   togglePause: () => void;
   toggleInteriorLights: () => void;
   addDistance: (kmDelta: number) => void;
+  setGuideOpen: (open: boolean) => void;
+  setMobileMoveDir: (dir: 'forward' | 'backward' | null) => void;
 }
 
 export const useGameStore = create<GameState>((set) => ({
@@ -56,6 +60,8 @@ export const useGameStore = create<GameState>((set) => ({
   routeName: 'TP. Hồ Chí Minh → Tiền Giang → Cần Thơ (QL1A)',
   journeyStatus: 'Đang di chuyển ổn định',
   distanceTraveledKm: 42.8,
+  isGuideOpen: false,
+  mobileMoveDir: null,
 
   setCameraMode: (mode) => set({ cameraMode: mode }),
 
@@ -101,5 +107,8 @@ export const useGameStore = create<GameState>((set) => ({
     set((state) => ({
       distanceTraveledKm: state.distanceTraveledKm + kmDelta,
     })),
-}));
 
+  setGuideOpen: (open) => set({ isGuideOpen: open }),
+
+  setMobileMoveDir: (dir) => set({ mobileMoveDir: dir }),
+}));

@@ -68,8 +68,8 @@ export const EconomyAndCustomizationModal: React.FC = () => {
   };
 
   return (
-    <div className="pointer-events-auto fixed inset-0 z-50 flex items-center justify-center bg-slate-950/75 backdrop-blur-md p-4">
-      <div className="w-full max-w-3xl rounded-3xl bg-slate-900 border border-slate-700/80 shadow-2xl overflow-hidden text-slate-100">
+    <div className="pointer-events-auto fixed inset-0 z-50 flex items-center justify-center bg-slate-950/75 backdrop-blur-md p-2 sm:p-4">
+      <div className="w-full max-w-3xl rounded-2xl sm:rounded-3xl bg-slate-900 border border-slate-700/80 shadow-2xl overflow-hidden text-slate-100 max-h-[92vh] flex flex-col">
         {/* Header */}
         <div className="flex items-center justify-between px-6 py-4 bg-gradient-to-r from-amber-950/80 via-slate-900 to-emerald-950/60 border-b border-slate-800">
           <div className="flex items-center gap-3">
@@ -79,7 +79,7 @@ export const EconomyAndCustomizationModal: React.FC = () => {
             <div>
               <div className="flex items-center gap-2">
                 <h2 className="text-base font-bold text-white">
-                  Kinh Tế & Tùy Chỉnh Nhân Vật (Phase 6 — Economy Ledger)
+                  Cửa Hàng & Tủ Đồ Nhân Vật
                 </h2>
                 <span className="px-2.5 py-0.5 rounded-full text-xs font-bold bg-amber-500/20 text-amber-300 border border-amber-500/40 flex items-center gap-1">
                   <Coins className="w-3.5 h-3.5" />
@@ -87,7 +87,7 @@ export const EconomyAndCustomizationModal: React.FC = () => {
                 </span>
               </div>
               <p className="text-xs text-slate-400">
-                Sổ cái giao dịch Idempotency, Cửa hàng 5 Slot (Áo, Quần, Tóc, Phụ kiện, Emote), Nhiệm vụ chống farm & Admin Audit
+                Tùy chỉnh trang phục, kiểu tóc, phụ kiện và biểu cảm nhân vật
               </p>
             </div>
           </div>
@@ -166,7 +166,7 @@ export const EconomyAndCustomizationModal: React.FC = () => {
         </div>
 
         {/* Body */}
-        <div className="p-6 max-h-[72vh] overflow-y-auto space-y-4">
+        <div className="p-3 sm:p-6 max-h-[70vh] overflow-y-auto space-y-4 flex-1">
           {tab === 'shop' && (
             <div className="space-y-4">
               <div className="flex flex-wrap gap-1.5">

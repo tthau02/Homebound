@@ -138,7 +138,7 @@ export const CharacterInteractionMenu: React.FC = () => {
         : 'Đang đứng ở lối đi';
 
   return (
-    <div className="pointer-events-auto fixed right-4 md:right-6 top-28 z-30 w-80 rounded-2xl bg-slate-950/90 backdrop-blur-xl border border-slate-700/80 shadow-2xl overflow-hidden text-slate-100">
+    <div className="pointer-events-auto fixed inset-x-3 bottom-24 sm:bottom-auto sm:inset-x-auto sm:right-6 sm:top-24 z-40 max-w-sm sm:w-80 rounded-2xl bg-slate-950/95 backdrop-blur-xl border border-slate-700/80 shadow-2xl overflow-hidden text-slate-100 mx-auto">
       {/* Header */}
       <div className="flex items-center justify-between px-4 py-3 bg-gradient-to-r from-slate-900 via-slate-900 to-amber-950/40 border-b border-slate-800">
         <div className="flex items-center gap-2.5">

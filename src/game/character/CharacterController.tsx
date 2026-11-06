@@ -4,7 +4,9 @@ import { useCharacterStore } from '../../stores/useCharacterStore';
 import { useInteractionStore } from '../../stores/useInteractionStore';
 import { useChatStore } from '../../stores/useChatStore';
 import { useMultiplayerStore } from '../../stores/useMultiplayerStore';
+import { useGameStore } from '../../stores/useGameStore';
 import { BUS_DIMENSIONS } from '../config/busConfig';
+import { EMOTE_DEFINITIONS } from './characterTypes';
 
 const WALK_SPEED = 1.45;
 const FAST_WALK_SPEED = 2.4;
@@ -70,7 +72,7 @@ export const CharacterController: React.FC = () => {
           useMultiplayerStore.getState().emitStand();
           useInteractionStore
             .getState()
-            .showStatusToast('Bạn đã đứng dậy khỏi ghế (Dùng WASD để di chuyển)');
+            .showStatusToast('Đã đứng dậy (Dùng WASD hoặc phím trên màn hình để đi lại)');
         }
       }
 
@@ -116,13 +118,14 @@ export const CharacterController: React.FC = () => {
       if (code === 'KeyD' || key === 'd' || code === 'ArrowRight') {
         keysPressedRef.current.d = false;
       }
-      if (!e.shiftKey || code === 'ShiftLeft' || code === 'ShiftRight') {
+      if (!e.shiftKey) {
         keysPressedRef.current.shift = false;
       }
     };
 
     window.addEventListener('keydown', handleKeyDown);
     window.addEventListener('keyup', handleKeyUp);
+
     return () => {
       window.removeEventListener('keydown', handleKeyDown);
       window.removeEventListener('keyup', handleKeyUp);
@@ -135,7 +138,7 @@ export const CharacterController: React.FC = () => {
     const player = charStore.characters[charStore.playerId];
     if (!player) return;
 
-    // 1. Update nearest interactable NPC for 'E' prompt
+    // 1. Proximity detection for nearest passenger (within 2.35m radius)
     let closestNpcId: string | null = null;
     let minDistSq = 2.35 * 2.35;
     for (const id of charStore.characterOrder) {
@@ -153,16 +156,19 @@ export const CharacterController: React.FC = () => {
     useInteractionStore.getState().setNearestInteractableNpcId(closestNpcId);
 
     const keys = keysPressedRef.current;
+    const mobileDir = useGameStore.getState().mobileMoveDir;
+    let moveZInput = (keys.s ? 1 : 0) - (keys.w ? 1 : 0);
+    if (mobileDir === 'forward') moveZInput -= 1;
+    if (mobileDir === 'backward') moveZInput += 1;
     const moveXInput = (keys.d ? 1 : 0) - (keys.a ? 1 : 0);
-    const moveZInput = (keys.s ? 1 : 0) - (keys.w ? 1 : 0);
     const hasManualInput = moveXInput !== 0 || moveZInput !== 0;
 
-    // 2. Do not allow WASD movement while sitting
+    // 2. Do not allow movement while sitting
     if (player.state === 'sitting') {
       return;
     }
 
-    // 3. If user presses WASD while auto-walking to a seat, cancel auto-walk
+    // 3. If user presses movement while auto-walking to a seat, cancel auto-walk
     if (hasManualInput && player.waypoints.length > 0) {
       charStore.cancelAutoWalk(player.id);
     }
@@ -222,7 +228,7 @@ export const CharacterController: React.FC = () => {
       return;
     }
 
-    // 5. Handle Manual WASD + Shift Movement inside Aisle Bounds
+    // 5. Handle Manual Keyboard / Mobile Movement inside Aisle Bounds
     if (hasManualInput) {
       const len = Math.hypot(moveXInput, moveZInput);
       const dirX = moveXInput / len;
@@ -263,21 +269,26 @@ export const CharacterController: React.FC = () => {
           'Walking'
         );
     } else if (player.state === 'walking') {
-      // Stopped pressing WASD -> return to Idle
+      // Stopped moving -> return to Idle (or active emote animation)
+      const idleAnim = player.activeEmote
+        ? EMOTE_DEFINITIONS[player.activeEmote].animation
+        : 'Idle';
       charStore.setCharacterStateAndAnimation(
         player.id,
         'idle',
-        player.activeEmote
-          ? player.currentAnimation
-          : 'Idle',
-        'Đang đứng ở lối đi giữa'
+        idleAnim,
+        'Đang đứng ở lối đi giữa xe'
       );
       useMultiplayerStore
         .getState()
-        .emitMoveThrottled(player.position, player.rotationY, 'idle', 'Idle');
+        .emitMoveThrottled(
+          player.position,
+          player.rotationY,
+          'idle',
+          idleAnim
+        );
     }
   });
 
   return null;
 };
-

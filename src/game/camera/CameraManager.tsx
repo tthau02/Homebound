@@ -10,7 +10,7 @@ import {
 import { busLiveOffset } from '../animation/useBusAnimation';
 
 export const CameraManager: React.FC = () => {
-  const { camera, gl } = useThree();
+  const { camera, gl, size } = useThree();
   const cameraMode = useGameStore((state) => state.cameraMode);
   const setCameraMode = useGameStore((state) => state.setCameraMode);
 
@@ -72,9 +72,10 @@ export const CameraManager: React.FC = () => {
     };
   }, [setCameraMode]);
 
-  // Pointer drag / subtle mouse look adjustment
+  // Pointer drag / touch look adjustment
   useEffect(() => {
     const domElement = gl.domElement;
+    domElement.style.touchAction = 'none';
 
     const handlePointerDown = (e: PointerEvent) => {
       isDraggingRef.current = true;
@@ -99,7 +100,7 @@ export const CameraManager: React.FC = () => {
           -CAMERA_TRANSITION_CONFIG.interiorMaxPitch,
           CAMERA_TRANSITION_CONFIG.interiorMaxPitch
         );
-      } else {
+      } else if (e.pointerType === 'mouse') {
         const normX = (e.clientX / window.innerWidth) * 2 - 1;
         const normY = (e.clientY / window.innerHeight) * 2 - 1;
         targetLookOffsetRef.current.yaw = THREE.MathUtils.lerp(
@@ -140,6 +141,10 @@ export const CameraManager: React.FC = () => {
     const focusedChar = focusedId ? charStore.characters[focusedId] : null;
     const playerChar = charStore.characters[charStore.playerId];
 
+    // Detect portrait orientation (< 1.0) on mobile/narrow viewports
+    const aspect = size.width / Math.max(1, size.height);
+    const isPortrait = aspect < 1.0;
+
     // Smooth exponential damping factor (~0.45s - 0.7s visual settle time)
     const dampFactor = 1 - Math.exp(-7.5 * delta);
     const lookDampFactor = 1 - Math.exp(-10.0 * delta);
@@ -161,10 +166,11 @@ export const CameraManager: React.FC = () => {
     if (activeMode === 'interior') {
       if (focusedChar) {
         // Focus camera inside the aisle looking cleanly at the selected passenger
-        const camZ = Math.min(5.2, Math.max(-1.2, focusedChar.position[2] + 2.35));
+        const camZOffset = isPortrait ? 2.85 : 2.35;
+        const camZ = Math.min(5.6, Math.max(-1.2, focusedChar.position[2] + camZOffset));
         desiredPosRef.current.set(
           busLiveOffset.xSway + yaw * 0.15,
-          2.12 + busLiveOffset.y * 0.85,
+          (isPortrait ? 2.22 : 2.12) + busLiveOffset.y * 0.85,
           camZ
         );
         desiredTargetRef.current.set(
@@ -173,18 +179,19 @@ export const CameraManager: React.FC = () => {
           focusedChar.position[2] - 0.4
         );
       } else {
-        // Follow player softly along the aisle while keeping cabin view clear
+        // Follow player softly along the aisle while keeping cabin view clear in both landscape and portrait
+        const followOffset = isPortrait ? 3.15 : 2.6;
         const followZ = playerChar
-          ? Math.min(5.15, Math.max(-0.6, playerChar.position[2] + 2.6))
-          : preset.position[2];
+          ? Math.min(5.6, Math.max(-0.6, playerChar.position[2] + followOffset))
+          : preset.position[2] + (isPortrait ? 0.45 : 0);
         desiredPosRef.current.set(
           preset.position[0] + busLiveOffset.xSway + yaw * 0.18,
-          preset.position[1] + busLiveOffset.y * 0.85,
+          (isPortrait ? 2.24 : preset.position[1]) + busLiveOffset.y * 0.85,
           followZ
         );
         desiredTargetRef.current.set(
           preset.target[0] + busLiveOffset.xSway - yaw * 4.5,
-          preset.target[1] + busLiveOffset.y * 0.65 + pitch * 2.4,
+          preset.target[1] + (isPortrait ? 0.12 : 0) + busLiveOffset.y * 0.65 + pitch * 2.4,
           preset.target[2]
         );
       }
@@ -192,7 +199,7 @@ export const CameraManager: React.FC = () => {
       if (focusedChar) {
         desiredPosRef.current.set(
           focusedChar.position[0] * 0.35 + busLiveOffset.xSway * 0.3,
-          12.4,
+          isPortrait ? 15.5 : 12.4,
           focusedChar.position[2] + 0.3
         );
         desiredTargetRef.current.set(
@@ -203,7 +210,7 @@ export const CameraManager: React.FC = () => {
       } else {
         desiredPosRef.current.set(
           preset.position[0] + busLiveOffset.xSway * 0.3 - yaw * 0.8,
-          preset.position[1],
+          isPortrait ? 17.0 : preset.position[1],
           preset.position[2] + pitch * 0.8
         );
         desiredTargetRef.current.set(
@@ -213,15 +220,17 @@ export const CameraManager: React.FC = () => {
         );
       }
     } else {
-      // Rear Chase camera: smoothly follow behind the bus with dampened sway
+      // Rear Chase camera: follow behind the bus with dampened sway and portrait-adapted distance
+      const chaseZ = isPortrait ? preset.position[2] + 3.2 : preset.position[2];
+      const chaseY = isPortrait ? preset.position[1] + 1.1 : preset.position[1];
       desiredPosRef.current.set(
         preset.position[0] + busLiveOffset.xSway * 0.55 - yaw * 1.6,
-        preset.position[1] + busLiveOffset.y * 0.35 - pitch * 0.8,
-        preset.position[2]
+        chaseY + busLiveOffset.y * 0.35 - pitch * 0.8,
+        chaseZ
       );
       desiredTargetRef.current.set(
         preset.target[0] + busLiveOffset.xSway * 0.4 + yaw * 2.5,
-        preset.target[1] + busLiveOffset.y * 0.25 + pitch * 1.6,
+        preset.target[1] + (isPortrait ? 0.3 : 0) + busLiveOffset.y * 0.25 + pitch * 1.6,
         preset.target[2]
       );
     }
@@ -232,9 +241,14 @@ export const CameraManager: React.FC = () => {
     camera.position.copy(currentPosRef.current);
     camera.lookAt(currentTargetRef.current);
 
+    // Dynamic FOV compensation for mobile portrait mode to prevent tunnel-vision zoom
     if (camera instanceof THREE.PerspectiveCamera) {
-      if (Math.abs(camera.fov - preset.fov) > 0.05) {
-        camera.fov = THREE.MathUtils.lerp(camera.fov, preset.fov, dampFactor);
+      const targetFov = isPortrait
+        ? THREE.MathUtils.clamp(preset.fov / (aspect * 1.12), preset.fov, 84)
+        : preset.fov;
+
+      if (Math.abs(camera.fov - targetFov) > 0.05) {
+        camera.fov = THREE.MathUtils.lerp(camera.fov, targetFov, dampFactor);
         camera.updateProjectionMatrix();
       }
     }

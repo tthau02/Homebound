@@ -12,15 +12,15 @@ import { LiveOpsFloatingDock } from './LiveOpsFloatingDock';
 
 export const GameHud: React.FC = () => {
   return (
-    <div className="pointer-events-none fixed inset-0 z-10 flex flex-col justify-between p-4 md:p-5">
-      {/* Top Bar: Left Brand + Passenger Drawer & Right Camera/Environment + Multiplayer Social Hub */}
-      <header className="flex flex-wrap items-start justify-between gap-4">
-        <div className="flex flex-col gap-2.5">
+    <div className="pointer-events-none fixed inset-0 z-30 flex flex-col justify-between p-2 sm:p-4">
+      {/* Top Bar: Left Brand + Passenger Drawer & Right Camera/Environment Controls */}
+      <header className="flex items-start justify-between gap-2 w-full">
+        <div className="flex flex-col gap-1.5 min-w-0">
           <TopLeftBrandPanel />
           <PassengerListDrawer />
         </div>
 
-        <div className="flex flex-col items-end gap-2.5">
+        <div className="flex flex-col items-end gap-1.5 shrink-0">
           <TopRightControlPanel />
           <LiveOpsFloatingDock />
           <MultiplayerSocialHub />
@@ -35,7 +35,7 @@ export const GameHud: React.FC = () => {
       <PlayerGuideHub />
 
       {/* Bottom Area: Player Chat/Emote/Movement Controls + Vehicle Telemetry Bar */}
-      <footer className="w-full">
+      <footer className="w-full flex flex-col items-center">
         <PlayerActionHud />
         <BottomTelemetryBar />
       </footer>

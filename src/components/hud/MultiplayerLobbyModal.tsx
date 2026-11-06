@@ -124,8 +124,8 @@ export const MultiplayerLobbyModal: React.FC = () => {
   };
 
   return (
-    <div className="pointer-events-auto fixed inset-0 z-50 flex items-center justify-center bg-slate-950/75 backdrop-blur-md p-4">
-      <div className="w-full max-w-2xl rounded-3xl bg-slate-900 border border-slate-700/80 shadow-2xl overflow-hidden text-slate-100">
+    <div className="pointer-events-auto fixed inset-0 z-50 flex items-center justify-center bg-slate-950/75 backdrop-blur-md p-2 sm:p-4">
+      <div className="w-full max-w-2xl rounded-2xl sm:rounded-3xl bg-slate-900 border border-slate-700/80 shadow-2xl overflow-hidden text-slate-100 max-h-[92vh] flex flex-col">
         {/* Top Modal Header */}
         <div className="flex items-center justify-between px-6 py-4 bg-gradient-to-r from-red-950/80 via-slate-900 to-amber-950/60 border-b border-slate-800">
           <div className="flex items-center gap-3">
@@ -135,14 +135,14 @@ export const MultiplayerLobbyModal: React.FC = () => {
             <div>
               <div className="flex items-center gap-2">
                 <h2 className="text-base font-bold text-white">
-                  Bến Xe P2P WebRTC — Virtual Bus Multiplayer
+                  Bến Xe Multiplayer
                 </h2>
                 <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/40">
                   100% P2P • No Backend
                 </span>
               </div>
               <p className="text-xs text-slate-400">
-                Kết nối trực tiếp Peer-to-Peer (PeerJS WebRTC + Đa Tab) qua Mã Chuyến Xe mà không cần chạy Server
+                Kết nối trực tiếp giữa người chơi qua mã phòng
               </p>
             </div>
           </div>
