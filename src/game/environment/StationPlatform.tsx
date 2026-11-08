@@ -1,21 +1,35 @@
 import React, { useRef } from 'react';
 import { useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
-import { useJourneyStore } from '../../stores/useJourneyStore';
+import {
+  liveJourneyTelemetry,
+  useJourneyStore,
+} from '../../stores/useJourneyStore';
 import { useGameStore } from '../../stores/useGameStore';
+import { useMultiplayerStore } from '../../stores/useMultiplayerStore';
 
 export const StationPlatform: React.FC = () => {
   const groupRef = useRef<THREE.Group | null>(null);
+  const departingRef = useRef(false);
   const timeOfDay = useGameStore((state) => state.timeOfDay);
   const isNight = timeOfDay === 'night';
 
   useFrame((_, rawDelta) => {
     if (!groupRef.current) return;
+
+    // Online P2P mode uses StopArea instead of offline StationPlatform
+    if (useMultiplayerStore.getState().isOnlineMode) {
+      groupRef.current.visible = false;
+      return;
+    }
+
     const delta = Math.min(rawDelta, 0.1);
     const journey = useJourneyStore.getState();
+    const gameStore = useGameStore.getState();
 
     // In station or completed: perfectly docked at z = 0
     if (journey.stage === 'at_station' || journey.stage === 'completed') {
+      departingRef.current = true;
       groupRef.current.position.z = THREE.MathUtils.lerp(
         groupRef.current.position.z,
         0,
@@ -23,18 +37,42 @@ export const StationPlatform: React.FC = () => {
       );
       groupRef.current.visible = true;
     } else if (journey.stage === 'approaching') {
-      // Gliding into boarding position as bus decelerates
-      const targetZ = -journey.distanceToNextStopKm * 28;
+      // Smoothly glide into boarding position (z = -36 -> 0) as bus decelerates
+      departingRef.current = false;
+      const targetZ = -liveJourneyTelemetry.distanceToNextStopKm * 30;
       groupRef.current.position.z = THREE.MathUtils.lerp(
         groupRef.current.position.z,
         targetZ,
-        1 - Math.exp(-5 * delta)
+        1 - Math.exp(-6 * delta)
       );
       groupRef.current.visible = true;
     } else {
-      // In transit on highway: station stays far ahead or gently loops out of immediate view
-      groupRef.current.position.z = -120;
-      groupRef.current.visible = journey.distanceToNextStopKm < 4.0;
+      // In transit on highway:
+      // 1) If we just departed a docked station, let it glide smoothly behind the bus (+Z) before hiding
+      if (departingRef.current) {
+        if (!gameStore.isPaused) {
+          const speedMs = (gameStore.busSpeedKmh * 1000) / 3600;
+          groupRef.current.position.z += speedMs * delta;
+        }
+        groupRef.current.visible = true;
+        if (groupRef.current.position.z > 44) {
+          departingRef.current = false;
+          groupRef.current.visible = false;
+          groupRef.current.position.z = -120;
+        }
+      } else if (liveJourneyTelemetry.distanceToNextStopKm < 4.0) {
+        // 2) Approaching within 4.0 -> 1.2 simulated km: glide smoothly from z = -120 -> -36
+        const targetZ = -liveJourneyTelemetry.distanceToNextStopKm * 30;
+        groupRef.current.position.z = THREE.MathUtils.lerp(
+          groupRef.current.position.z,
+          targetZ,
+          1 - Math.exp(-5 * delta)
+        );
+        groupRef.current.visible = true;
+      } else {
+        groupRef.current.position.z = -120;
+        groupRef.current.visible = false;
+      }
     }
   });
 

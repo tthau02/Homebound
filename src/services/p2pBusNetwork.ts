@@ -195,7 +195,7 @@ export function normalizeRoomCode(raw: string): string {
     .replace(/[^A-Z0-9-]/g, '-')
     .replace(/-+/g, '-')
     .replace(/^-|-$/g, '');
-  return cleaned || 'MIENTAY-01';
+  return cleaned || 'BINHLUC-168';
 }
 
 function getHostPeerId(roomCode: string): string {
@@ -373,14 +373,14 @@ export class P2PBusNetworkService {
     }
 
     // Seed default room templates in discoveredRooms
-    const routeMienTay = DEFAULT_ROUTES[0];
-    const routeDaLat = DEFAULT_ROUTES[1] ?? DEFAULT_ROUTES[0];
+    const routeBinhLuc = DEFAULT_ROUTES[0];
+    const routeMyDinh = DEFAULT_ROUTES[1] ?? DEFAULT_ROUTES[0];
 
-    this.discoveredRooms.set('MIENTAY-01', {
-      roomId: 'MIENTAY-01',
-      name: 'Xe Phương Trang — Miền Tây (QL1A)',
-      routeId: routeMienTay.id,
-      routeName: routeMienTay.name,
+    this.discoveredRooms.set('BINHLUC-168', {
+      roomId: 'BINHLUC-168',
+      name: 'Xe Khách 168 — Bình Lục → BX Mỹ Đình',
+      routeId: routeBinhLuc.id,
+      routeName: routeBinhLuc.name,
       maxPlayers: 28,
       currentPlayers: 0,
       status: 'BOARDING',
@@ -388,11 +388,11 @@ export class P2PBusNetworkService {
       assistantName: 'Chưa có phụ xe',
     });
 
-    this.discoveredRooms.set('DALAT-02', {
-      roomId: 'DALAT-02',
-      name: 'Xe Thành Bưởi — Cao Nguyên Đà Lạt',
-      routeId: routeDaLat.id,
-      routeName: routeDaLat.name,
+    this.discoveredRooms.set('MYDINH-02', {
+      roomId: 'MYDINH-02',
+      name: 'Xe Limousine — BX Mỹ Đình → Bình Lục',
+      routeId: routeMyDinh.id,
+      routeName: routeMyDinh.name,
       maxPlayers: 28,
       currentPlayers: 0,
       status: 'BOARDING',

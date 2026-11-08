@@ -3,6 +3,7 @@ import { useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
 import { useGameStore } from '../../stores/useGameStore';
 import { useJourneyStore } from '../../stores/useJourneyStore';
+import { useMultiplayerStore } from '../../stores/useMultiplayerStore';
 import { BUS_DIMENSIONS } from '../config/busConfig';
 
 interface UseBusAnimationParams {
@@ -40,12 +41,14 @@ export const useBusAnimation = ({ bodyGroupRef, wheelRefs }: UseBusAnimationPara
     phaseRef.current += delta * (1.8 + speedFactor * 2.4);
     const t = phaseRef.current;
 
-    // Update odometer in store roughly every 0.05 km to avoid per-frame store updates
-    const kmStep = (speedMs * delta) / 1000;
-    distanceAccumulatorRef.current += kmStep;
-    if (distanceAccumulatorRef.current >= 0.05) {
-      state.addDistance(distanceAccumulatorRef.current);
-      distanceAccumulatorRef.current = 0;
+    // Update odometer directly only in Online P2P mode (Offline mode maps route km in useJourneyStore)
+    if (useMultiplayerStore.getState().isOnlineMode) {
+      const kmStep = (speedMs * delta) / 1000;
+      distanceAccumulatorRef.current += kmStep;
+      if (distanceAccumulatorRef.current >= 0.05) {
+        state.addDistance(distanceAccumulatorRef.current);
+        distanceAccumulatorRef.current = 0;
+      }
     }
 
     // Gentle suspension bounce, pitch, and roll proportional to speed

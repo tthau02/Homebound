@@ -15,10 +15,10 @@ import { useChatStore } from '../../stores/useChatStore';
 import { useMultiplayerStore } from '../../stores/useMultiplayerStore';
 
 const NPC_REPLY_POOL = [
-  'Chào bạn nhé! Rất vui được đi cùng chuyến xe miền Tây hôm nay! 😊🚌',
-  'Xin chào! Ngồi ghế da xe này êm quá ha! 👋✨',
-  'Chào bạn! Bạn cũng về Cần Thơ dịp này hả? 🌾😄',
-  'Rất vui được làm quen với bạn trên hành trình này nhé! 🤝😊',
+  'Chào bạn nhé! Bạn cũng bắt xe từ chỗ Bánh mì 168 Bình Lục lên Hà Nội hả? 😊🚌',
+  'Xin chào! Ngồi ghế da xe này chạy cao tốc Pháp Vân êm quá ha! 👋✨',
+  'Chào bạn! Bạn xuống Khuất Duy Tiến – Big C hay vào tận Bến xe Mỹ Đình thế? 😄',
+  'Rất vui được làm quen với bạn trên chuyến Bình Lục – Mỹ Đình nhé! 🤝😊',
 ];
 
 export const CharacterInteractionMenu: React.FC = () => {

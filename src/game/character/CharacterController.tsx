@@ -170,9 +170,11 @@ export const CharacterController: React.FC = () => {
     const keys = keysPressedRef.current;
     const mobileDir = useGameStore.getState().mobileMoveDir;
     let moveZInput = (keys.s ? 1 : 0) - (keys.w ? 1 : 0);
+    let moveXInput = (keys.d ? 1 : 0) - (keys.a ? 1 : 0);
     if (mobileDir === 'forward') moveZInput -= 1;
     if (mobileDir === 'backward') moveZInput += 1;
-    const moveXInput = (keys.d ? 1 : 0) - (keys.a ? 1 : 0);
+    if (mobileDir === 'left') moveXInput -= 1;
+    if (mobileDir === 'right') moveXInput += 1;
     const hasManualInput = moveXInput !== 0 || moveZInput !== 0;
 
     // 2. Do not allow movement while sitting

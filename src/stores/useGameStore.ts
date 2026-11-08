@@ -5,6 +5,7 @@ export type CameraMode = 'interior' | 'top-down' | 'chase';
 export type TimeOfDay = 'day' | 'night';
 export type WeatherMode = Lowercase<JourneyWeather>;
 export type GraphicsQuality = 'low' | 'medium' | 'high';
+export type MobileMoveDir = 'forward' | 'backward' | 'left' | 'right' | null;
 
 export interface PassengerSeatInfo {
   id: string;
@@ -31,7 +32,7 @@ interface GameState {
   journeyStatus: string;
   distanceTraveledKm: number;
   isGuideOpen: boolean;
-  mobileMoveDir: 'forward' | 'backward' | null;
+  mobileMoveDir: MobileMoveDir;
 
   // Actions
   setCameraMode: (mode: CameraMode) => void;
@@ -44,7 +45,7 @@ interface GameState {
   toggleInteriorLights: () => void;
   addDistance: (kmDelta: number) => void;
   setGuideOpen: (open: boolean) => void;
-  setMobileMoveDir: (dir: 'forward' | 'backward' | null) => void;
+  setMobileMoveDir: (dir: MobileMoveDir) => void;
 }
 
 export const useGameStore = create<GameState>((set) => ({
@@ -56,10 +57,10 @@ export const useGameStore = create<GameState>((set) => ({
   isPaused: false,
   interiorLightsOn: true,
   headlightsOn: true,
-  tripName: 'VB-2026 • Chuyến Xe Miền Tây',
-  routeName: 'TP. Hồ Chí Minh → Tiền Giang → Cần Thơ (QL1A)',
+  tripName: 'VB-168 • Bình Lục → BX Mỹ Đình',
+  routeName: 'Bánh mì 168 Bình Lục (Hà Nam) → Cao tốc Pháp Vân → BX Mỹ Đình (Hà Nội)',
   journeyStatus: 'Đang di chuyển ổn định',
-  distanceTraveledKm: 42.8,
+  distanceTraveledKm: 0,
   isGuideOpen: false,
   mobileMoveDir: null,
 
@@ -85,11 +86,13 @@ export const useGameStore = create<GameState>((set) => ({
 
   setGraphicsQuality: (quality) => set({ graphicsQuality: quality }),
 
-  setBusSpeedKmh: (speed) =>
+  setBusSpeedKmh: (speed) => {
+    const clamped = Math.max(0, Math.min(100, Math.round(speed * 10) / 10));
     set({
-      busSpeedKmh: Math.max(0, Math.min(100, speed)),
-      journeyStatus: speed > 0 ? 'Đang di chuyển ổn định' : 'Đang tạm dừng',
-    }),
+      busSpeedKmh: clamped,
+      journeyStatus: clamped > 0 ? 'Đang di chuyển ổn định' : 'Đang tạm dừng',
+    });
+  },
 
   togglePause: () =>
     set((state) => {

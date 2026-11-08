@@ -95,8 +95,8 @@ export const EXTENDED_CATALOG_ITEMS: ExtendedCatalogItem[] = [
   },
   {
     id: 'hair-breeze-undercut',
-    name: 'Tóc Phong Lữ Cao Nguyên',
-    description: 'Kiểu tóc gọn gàng trẻ trung hợp với những chuyến xe đêm Đà Lạt.',
+    name: 'Tóc Undercut Thanh Lịch',
+    description: 'Kiểu tóc gọn gàng trẻ trung hợp với những chuyến xe Bình Lục – Hà Nội.',
     category: 'hair',
     priceCoins: 95,
     assetKey: 'mesh_hair_breeze',
@@ -107,8 +107,8 @@ export const EXTENDED_CATALOG_ITEMS: ExtendedCatalogItem[] = [
   },
   {
     id: 'acc-non-la-charm',
-    name: 'Nón Lá Miền Tây Cách Điệu',
-    description: 'Phụ kiện nón lá truyền thống kèm dây lụa đỏ.',
+    name: 'Nón Lá Làng Chuông Cách Điệu',
+    description: 'Phụ kiện nón lá truyền thống Bắc Bộ kèm dây lụa đỏ.',
     category: 'accessory',
     priceCoins: 180,
     assetKey: 'mesh_acc_nonla',
@@ -119,8 +119,8 @@ export const EXTENDED_CATALOG_ITEMS: ExtendedCatalogItem[] = [
   },
   {
     id: 'acc-retro-sunglasses',
-    name: 'Kính Râm Retro Quốc Lộ 1A',
-    description: 'Kính mát chống chói khi ngồi ghế cửa sổ ban ngày.',
+    name: 'Kính Râm Retro Cao Tốc',
+    description: 'Kính mát chống chói khi ngồi ghế cửa sổ chạy cao tốc Pháp Vân.',
     category: 'accessory',
     priceCoins: 140,
     assetKey: 'mesh_acc_glasses',
@@ -286,7 +286,7 @@ export const useEconomyLedgerStore = create<EconomyLedgerStoreState>(
       {
         id: 'quest-rest-stop',
         title: 'Khám phá trạm dừng nghỉ',
-        description: 'Trải nghiệm trạm dừng chân miền Tây hoặc cao nguyên Đà Lạt.',
+        description: 'Trải nghiệm trạm dừng Liêm Tuyền (Km227) hoặc các điểm đón trả dọc hành trình Bình Lục – Mỹ Đình.',
         rewardCoins: 100,
         dailyLimit: 1,
         claimedToday: 0,

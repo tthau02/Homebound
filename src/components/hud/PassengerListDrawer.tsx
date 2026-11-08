@@ -47,11 +47,14 @@ export const PassengerListDrawer: React.FC = () => {
         <button
           type="button"
           onClick={() => setIsOpen(true)}
-          className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-slate-950/75 hover:bg-slate-900/90 backdrop-blur-md border border-slate-800/80 text-xs font-medium text-slate-300 hover:text-white shadow-lg transition-all"
+          className="flex items-center gap-1.5 sm:gap-2 px-2.5 sm:px-3 py-1 sm:py-1.5 rounded-xl bg-slate-950/75 hover:bg-slate-900/90 backdrop-blur-md border border-slate-800/80 text-[11px] sm:text-xs font-medium text-slate-300 hover:text-white shadow-lg transition-all"
         >
-          <Users className="w-3.5 h-3.5 text-amber-400" />
-          <span>Hành khách ({characterOrder.length})</span>
-          <ChevronDown className="w-3 h-3 text-slate-400" />
+          <Users className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+          <span>
+            <span className="hidden sm:inline">Hành khách</span>
+            <span className="sm:hidden">Khách</span> ({characterOrder.length})
+          </span>
+          <ChevronDown className="w-3 h-3 text-slate-400 shrink-0" />
         </button>
       ) : (
         /* Expanded Drawer Card */

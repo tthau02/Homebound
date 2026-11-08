@@ -145,8 +145,8 @@ function restoreOfflineScene(): void {
     seats: structuredClone(savedOfflineScene.seats),
   });
   useGameStore.setState({
-    tripName: 'Chuyến Xe Miền Tây #VB-108',
-    routeName: 'TP.HCM → Tiền Giang → Cần Thơ',
+    tripName: 'VB-168 • Bình Lục → BX Mỹ Đình',
+    routeName: 'Bánh mì 168 Bình Lục (Hà Nam) → Cao tốc Pháp Vân → BX Mỹ Đình (Hà Nội)',
     busSpeedKmh: 62,
     isPaused: false,
     journeyStatus: 'Đang chạy trên hành trình',

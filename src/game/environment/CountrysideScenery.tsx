@@ -3,6 +3,10 @@ import { useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
 import { ENVIRONMENT_CONFIG } from '../config/environmentConfig';
 import { useGameStore } from '../../stores/useGameStore';
+import {
+  liveJourneyTelemetry,
+  useJourneyStore,
+} from '../../stores/useJourneyStore';
 
 interface SceneryTree {
   x: number;
@@ -125,6 +129,12 @@ export const CountrysideScenery: React.FC = () => {
     const speedMs = (state.busSpeedKmh * 1000) / 3600;
     const baseDz = speedMs * delta;
     const dummy = dummyRef.current;
+    const journeyStage = useJourneyStore.getState().stage;
+    const isNearStation =
+      journeyStage === 'approaching' ||
+      journeyStage === 'at_station' ||
+      journeyStage === 'completed' ||
+      liveJourneyTelemetry.distanceToNextStopKm < 4.2;
 
     // Update Trees (Smooth Natural Tropical Canopy)
     if (
@@ -139,22 +149,26 @@ export const CountrysideScenery: React.FC = () => {
           t.z -= ENVIRONMENT_CONFIG.loopSpan;
         }
 
+        // Offset right-side near trees outward when a station platform is active so trees never poke through the platform
+        const renderX =
+          isNearStation && t.x > 0 && t.x < 16.5 ? t.x + 8.5 : t.x;
+
         // Trunk
-        dummy.position.set(t.x, 1.4 * t.scale, t.z);
+        dummy.position.set(renderX, 1.4 * t.scale, t.z);
         dummy.rotation.set(0, (i * 1.1) % (Math.PI * 2), 0);
         dummy.scale.set(t.scale, t.scale, t.scale);
         dummy.updateMatrix();
         treeTrunkRef.current.setMatrixAt(i, dummy.matrix);
 
         // Lower Broad Leafy Canopy
-        dummy.position.set(t.x, 3.2 * t.scale, t.z);
+        dummy.position.set(renderX, 3.2 * t.scale, t.z);
         dummy.rotation.set(0, (i * 0.7) % (Math.PI * 2), 0);
         dummy.scale.set(t.scale * 1.35, t.scale * 1.1, t.scale * 1.35);
         dummy.updateMatrix();
         treeCrownLowerRef.current.setMatrixAt(i, dummy.matrix);
 
         // Upper Crown Cluster
-        dummy.position.set(t.x + 0.15, 4.4 * t.scale, t.z - 0.1);
+        dummy.position.set(renderX + 0.15, 4.4 * t.scale, t.z - 0.1);
         dummy.rotation.set(0.2, (i * 1.3) % (Math.PI * 2), 0);
         dummy.scale.set(t.scale * 1.05, t.scale * 1.0, t.scale * 1.05);
         dummy.updateMatrix();
@@ -260,6 +274,7 @@ export const CountrysideScenery: React.FC = () => {
     }
     if (restStopGroupRef.current) {
       restStopGroupRef.current.position.z = restStopZRef.current;
+      restStopGroupRef.current.visible = !isNearStation;
     }
   });
 

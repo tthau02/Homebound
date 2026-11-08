@@ -13,32 +13,32 @@ const AMBIENT_NPC_LINES: Array<{
 }> = [
   {
     npcId: 'p1',
-    text: 'Cảnh đồng lúa miền Tây hai bên đường đẹp quá! 🌾✨',
+    text: 'Đón xe ngay chỗ Bánh mì 168 Bình Lục tiện thật, chạy vèo lên cao tốc Pháp Vân! 🥖🚌',
     emote: 'Smile',
   },
   {
     npcId: 'p4',
-    text: 'Xe chạy êm thiệt, ngồi ghế da này thoải mái ghê 👍',
+    text: 'Xe chạy êm ghê, tầm hơn tiếng rưỡi là tới Bến xe Mỹ Đình rồi 👍',
     emote: 'Nod',
   },
   {
     npcId: 'p7',
-    text: 'Chào bạn nha! Bạn ngồi ghế nào thế? 👋😊',
+    text: 'Chào bạn nha! Bạn xuống Khuất Duy Tiến – Big C hay vào tận BX Mỹ Đình thế? 👋😊',
     emote: 'Wave',
   },
   {
     npcId: 'p8',
-    text: 'Haha bác tài mở nhạc miền Tây nghe vui tai quá! 😄🎶',
+    text: 'Qua nút giao Liêm Tuyền lên cao tốc đường thoáng chạy thích thật! 😄🎶',
     emote: 'Laugh',
   },
   {
     npcId: 'p3',
-    text: 'Sắp tới trạm dừng nghỉ rồi đó mọi người ơi! 👏',
+    text: 'Sắp tới điểm dừng nghỉ rồi đó mọi người ơi! 👏',
     emote: 'Clap',
   },
   {
     npcId: 'p5',
-    text: 'Mình tranh thủ chợp mắt một lát nhé... 😴💤',
+    text: 'Mình chợp mắt một lát, tới nút giao Pháp Vân gọi mình nhé... 😴💤',
     emote: 'Sleep',
   },
 ];

@@ -65,7 +65,7 @@ export const MultiplayerLobbyModal: React.FC = () => {
   const [newRoomCode, setNewRoomCode] = useState('');
   const [newRoomName, setNewRoomName] = useState('');
   const [selectedRouteId, setSelectedRouteId] = useState(
-    routes[0]?.id ?? 'route-ql1a-mientay'
+    routes[0]?.id ?? 'route-binhluc-mydinh'
   );
 
   useEffect(() => {
@@ -236,7 +236,7 @@ export const MultiplayerLobbyModal: React.FC = () => {
                         required
                         value={displayName}
                         onChange={(e) => setDisplayName(e.target.value)}
-                        placeholder="VD: Minh Khoa Cần Thơ"
+                        placeholder="VD: Minh Khoa Bình Lục"
                         className="w-full px-3.5 py-2 rounded-xl bg-slate-950 border border-slate-700 text-sm text-white focus:outline-none focus:border-amber-500"
                       />
                     </div>
@@ -412,7 +412,7 @@ export const MultiplayerLobbyModal: React.FC = () => {
                     onChange={(e) =>
                       setDirectRoomCode(e.target.value.toUpperCase())
                     }
-                    placeholder="Nhập mã phòng (VD: MIENTAY-01, DALAT-02, XE-VIP-88)..."
+                    placeholder="Nhập mã phòng (VD: BINHLUC-168, MYDINH-02, XE-VIP-88)..."
                     className="flex-1 px-3.5 py-2 rounded-xl bg-slate-900 border border-slate-700 font-mono text-xs uppercase text-amber-300 placeholder:text-slate-500 focus:outline-none focus:border-amber-400"
                   />
                   <button
@@ -526,7 +526,7 @@ export const MultiplayerLobbyModal: React.FC = () => {
                     required
                     value={newRoomName}
                     onChange={(e) => setNewRoomName(e.target.value)}
-                    placeholder="Tên chuyến xe (VD: Xe Đêm Cần Thơ)"
+                    placeholder="Tên chuyến xe (VD: Xe Sáng Bình Lục - Mỹ Đình)"
                     className="px-3 py-2 rounded-xl bg-slate-900 border border-slate-700 text-xs text-white focus:outline-none focus:border-amber-500"
                   />
                   <select

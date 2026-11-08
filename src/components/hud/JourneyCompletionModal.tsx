@@ -15,11 +15,12 @@ export const JourneyCompletionModal: React.FC = () => {
   const closeCompletionModal = useJourneyStore((state) => state.closeCompletionModal);
   const restartJourney = useJourneyStore((state) => state.restartJourney);
   const distanceTraveledKm = useGameStore((state) => state.distanceTraveledKm);
+  const finalStop = JOURNEY_STOPS[JOURNEY_STOPS.length - 1];
 
   if (!isCompletionModalOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 bg-black/75 backdrop-blur-md animate-fade-in">
+    <div className="pointer-events-auto fixed inset-0 z-50 flex items-center justify-center p-3 bg-black/75 backdrop-blur-md animate-fade-in">
       <div className="relative w-full max-w-lg rounded-3xl bg-slate-950/95 border border-amber-500/40 p-5 sm:p-6 shadow-2xl shadow-amber-950/50 flex flex-col items-center text-center">
         {/* Close button */}
         <button
@@ -43,8 +44,11 @@ export const JourneyCompletionModal: React.FC = () => {
           HOÀN THÀNH XUẤT SẮC HÀNH TRÌNH!
         </h2>
         <p className="text-xs sm:text-sm text-slate-300 mt-1 max-w-sm">
-          Chuyến xe Virtual Bus đã cập bến an toàn tại{' '}
-          <strong className="text-amber-300">Bến xe Trung tâm Cần Thơ</strong>.
+          Chuyến xe từ <strong>Bánh mì 168 Bình Lục</strong> đã cập bến an toàn tại{' '}
+          <strong className="text-amber-300">
+            {finalStop?.name ?? 'Bến xe Mỹ Đình (Số 20 Phạm Hùng, Hà Nội)'}
+          </strong>
+          .
         </p>
 
         {/* Journey Statistics Box */}

@@ -7,6 +7,8 @@ import { useMultiplayerStore } from '../../stores/useMultiplayerStore';
 import { useGameStore } from '../../stores/useGameStore';
 import { useInteractionStore } from '../../stores/useInteractionStore';
 import { useLiveOpsStore } from '../../stores/useLiveOpsStore';
+import { useJourneyStore } from '../../stores/useJourneyStore';
+import { useTelemetryStore } from '../../stores/useTelemetryStore';
 
 interface ChatBubbleProps {
   characterName: string;
@@ -35,13 +37,17 @@ export const ChatBubble: React.FC<ChatBubbleProps> = ({
     (s) => s.selectedCharacterId !== null
   );
   const isLiveOpsOpen = useLiveOpsStore((s) => s.isModalOpen);
+  const isCompletionOpen = useJourneyStore((s) => s.isCompletionModalOpen);
+  const isDiagnosticsOpen = useTelemetryStore((s) => s.isDiagnosticsOpen);
 
   if (
     isEconomyOpen ||
     isLobbyOpen ||
     isGuideOpen ||
     isInteractionOpen ||
-    isLiveOpsOpen
+    isLiveOpsOpen ||
+    isCompletionOpen ||
+    isDiagnosticsOpen
   ) {
     return null;
   }

@@ -5,6 +5,11 @@ import { useCharacterStore } from '../../stores/useCharacterStore';
 import { useInteractionStore } from '../../stores/useInteractionStore';
 import { BusSeat } from '../bus/BusSeat';
 import { useMultiplayerStore } from '../../stores/useMultiplayerStore';
+import { useGameStore } from '../../stores/useGameStore';
+import { useJourneyStore } from '../../stores/useJourneyStore';
+import { useEconomyLedgerStore } from '../../stores/useEconomyLedgerStore';
+import { useLiveOpsStore } from '../../stores/useLiveOpsStore';
+import { useTelemetryStore } from '../../stores/useTelemetryStore';
 
 export const SeatManager: React.FC = () => {
   const seats = useSeatStore((state) => state.seats);
@@ -16,8 +21,29 @@ export const SeatManager: React.FC = () => {
     (state) => state.characters[state.playerId]?.targetSeatId ?? null
   );
 
+  // Call every Zustand hook unconditionally to strictly obey React Rules of Hooks
+  const isGuideOpen = useGameStore((s) => s.isGuideOpen);
+  const isLobbyOpen = useMultiplayerStore((s) => s.isLobbyModalOpen);
+  const isEconomyOpen = useEconomyLedgerStore((s) => s.isModalOpen);
+  const isCompletionOpen = useJourneyStore((s) => s.isCompletionModalOpen);
+  const isInteractionOpen = useInteractionStore(
+    (s) => s.selectedCharacterId !== null
+  );
+  const isLiveOpsOpen = useLiveOpsStore((s) => s.isModalOpen);
+  const isDiagnosticsOpen = useTelemetryStore((s) => s.isDiagnosticsOpen);
+
+  const isAnyModalOpen =
+    isGuideOpen ||
+    isLobbyOpen ||
+    isEconomyOpen ||
+    isCompletionOpen ||
+    isInteractionOpen ||
+    isLiveOpsOpen ||
+    isDiagnosticsOpen;
+
   const handleSeatClick = useCallback((seatId: string) => {
     const seatStore = useSeatStore.getState();
+    seatStore.setHoveredSeatId(null);
     const charStore = useCharacterStore.getState();
     const interStore = useInteractionStore.getState();
 
@@ -82,8 +108,8 @@ export const SeatManager: React.FC = () => {
         );
       })}
 
-      {/* Floating Tooltip for Hovered Seat */}
-      {hoveredSeat && (
+      {/* Floating Tooltip for Hovered Seat (fixed screen scale so close seats never appear oversized) */}
+      {hoveredSeat && !isAnyModalOpen && (
         <Html
           position={[
             hoveredSeat.position[0],
@@ -91,11 +117,11 @@ export const SeatManager: React.FC = () => {
             hoveredSeat.position[2],
           ]}
           center
-          distanceFactor={8}
+          zIndexRange={[5, 0]}
           style={{ pointerEvents: 'none' }}
         >
           <div
-            className={`px-2.5 py-1 rounded-lg text-[11px] font-semibold whitespace-nowrap border shadow-lg backdrop-blur-md ${
+            className={`px-2.5 py-1 rounded-lg text-[11px] font-semibold whitespace-nowrap border shadow-lg backdrop-blur-md select-none pointer-events-none ${
               hoveredSeat.occupied
                 ? 'bg-rose-950/90 text-rose-200 border-rose-500/40'
                 : 'bg-emerald-950/90 text-emerald-200 border-emerald-500/50'

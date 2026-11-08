@@ -10,6 +10,7 @@ import { MultiplayerSocialHub } from './MultiplayerSocialHub';
 import { PlayerGuideHub } from './PlayerGuideHub';
 import { LiveOpsFloatingDock } from './LiveOpsFloatingDock';
 import { JourneyCompletionModal } from './JourneyCompletionModal';
+import { MobileArrowPad } from './MobileArrowPad';
 
 export const GameHud: React.FC = () => {
   return (
@@ -36,10 +37,14 @@ export const GameHud: React.FC = () => {
       <PlayerGuideHub />
       <JourneyCompletionModal />
 
-      {/* Bottom Area: Player Chat/Emote/Movement Controls + Vehicle Telemetry Bar */}
-      <footer className="w-full flex flex-col items-center">
+      {/* Bottom Area: Split Left & Right HUD Docks (Center stays completely open) */}
+      <footer className="w-full flex items-end justify-between gap-2 sm:gap-4">
+        <div className="flex flex-col items-start gap-1.5 min-w-0">
+          <MobileArrowPad />
+          <BottomTelemetryBar />
+        </div>
+
         <PlayerActionHud />
-        <BottomTelemetryBar />
       </footer>
     </div>
   );

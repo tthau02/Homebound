@@ -34,7 +34,7 @@ export const useChatStore = create<ChatStoreState>((set, get) => ({
       id: 'init-1',
       characterId: 'p1',
       characterName: 'Minh Anh',
-      text: 'Chuyến xe về miền Tây hôm nay êm quá mọi người nhỉ! 🌿🚌',
+      text: 'Chuyến xe từ Bánh mì 168 Bình Lục lên Mỹ Đình sáng nay thoáng quá mọi người nhỉ! 🥖🚌',
       createdAt: Date.now() - 12000,
       expiresAt: Date.now() + 4000,
     },

@@ -90,7 +90,7 @@ export const TopRightControlPanel: React.FC = () => {
               type="button"
               onClick={() => setCameraMode(mode)}
               title={`${preset.label} (Phím ${preset.keyTrigger})`}
-              className={`flex items-center gap-1.5 px-2.5 sm:px-3 py-1 sm:py-1.5 rounded-xl text-xs font-bold transition-all duration-200 ${
+              className={`flex items-center gap-1.5 px-2 sm:px-3 py-1 sm:py-1.5 rounded-xl text-xs font-bold transition-all duration-200 ${
                 isActive
                   ? 'bg-gradient-to-r from-amber-500 via-rose-500 to-red-600 text-white shadow-lg shadow-amber-500/25 scale-[1.03]'
                   : 'text-slate-300 hover:text-white hover:bg-slate-800/60'
@@ -99,7 +99,7 @@ export const TopRightControlPanel: React.FC = () => {
               {renderCameraIcon(mode)}
               <span className="hidden sm:inline">{preset.shortLabel}</span>
               <kbd
-                className={`px-1 py-0.2 text-[9px] rounded font-mono ${
+                className={`hidden sm:inline px-1 py-0.2 text-[9px] rounded font-mono ${
                   isActive
                     ? 'bg-black/30 text-amber-100 border border-white/20'
                     : 'bg-slate-800/80 text-slate-400 border border-slate-700/60'
