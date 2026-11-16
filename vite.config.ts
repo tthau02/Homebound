@@ -14,6 +14,7 @@ export default defineConfig({
         manualChunks: {
           three: ['three'],
           r3f: ['@react-three/fiber', '@react-three/drei'],
+          postfx: ['@react-three/postprocessing', 'postprocessing'],
           vendor: ['react', 'react-dom', 'zustand', 'lucide-react', 'peerjs'],
         },
       },

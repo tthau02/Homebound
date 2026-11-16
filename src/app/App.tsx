@@ -1,5 +1,6 @@
 import React, { Suspense, lazy } from 'react';
 import { GameHud } from '../components/hud/GameHud';
+import { StoryDirector } from '../game/story/StoryDirector';
 
 const GameCanvas = lazy(() => import('../game/core/GameCanvas').then((module) => ({
   default: module.GameCanvas,
@@ -7,7 +8,7 @@ const GameCanvas = lazy(() => import('../game/core/GameCanvas').then((module) =>
 
 export const App: React.FC = () => {
   return (
-    <main className="relative w-full h-full h-[100dvh] overflow-hidden bg-slate-950 text-slate-100 select-none touch-none">
+    <main className="relative w-full h-full h-[100dvh] overflow-hidden bg-ink-950 text-ink-100 select-none touch-none">
       <Suspense
         fallback={
           <div className="absolute inset-0 grid place-items-center bg-slate-950 text-sm text-slate-300">
@@ -18,6 +19,7 @@ export const App: React.FC = () => {
         <GameCanvas />
       </Suspense>
       <GameHud />
+      <StoryDirector />
     </main>
   );
 };

@@ -74,6 +74,11 @@ export const EMOTE_DEFINITIONS: Record<EmoteType, EmoteDefinition> = {
   },
 };
 
+/** Stylized appearance options (Phase 9.5). Optional so older P2P payloads stay valid. */
+export type BodyType = 'masc' | 'fem';
+export type HairStyle = 'short' | 'sidePart' | 'long' | 'bun' | 'ponytail' | 'buzz';
+export type CharacterAccessory = 'glasses' | 'nonLa' | 'cap' | 'backpack';
+
 export interface CharacterData {
   id: string;
   name: string;
@@ -95,5 +100,8 @@ export interface CharacterData {
   hometown: string;
   bio: string;
   activityLabel: string;
+  bodyType?: BodyType;
+  hairStyle?: HairStyle;
+  accessories?: CharacterAccessory[];
 }
 

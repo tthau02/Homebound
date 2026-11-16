@@ -1,14 +1,16 @@
-import React, { useMemo, useRef } from 'react';
+import React, { useRef } from 'react';
 import { useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
-import { ENVIRONMENT_CONFIG } from '../config/environmentConfig';
+import { ENVIRONMENT_CONFIG, ROAD_LAYOUT } from '../config/environmentConfig';
 import { useGameStore } from '../../stores/useGameStore';
 
-interface StreetLightItem {
-  z: number;
-  side: -1 | 1;
-}
+const POLE_COUNT = ENVIRONMENT_CONFIG.streetLightCount / 2;
+const ARM_REACH = 2.4;
 
+/**
+ * Double-arm street lights standing on the median, one arm over each carriageway.
+ * Instanced and looped along Z; two pooled point lights follow the pole nearest the bus.
+ */
 export const StreetLights: React.FC = () => {
   const timeOfDay = useGameStore((state) => state.timeOfDay);
   const isNight = timeOfDay === 'night';
@@ -18,76 +20,44 @@ export const StreetLights: React.FC = () => {
   const bulbMeshRef = useRef<THREE.InstancedMesh | null>(null);
   const nearLightLeftRef = useRef<THREE.PointLight | null>(null);
   const nearLightRightRef = useRef<THREE.PointLight | null>(null);
-
   const dummyRef = useRef(new THREE.Object3D());
-  const count = ENVIRONMENT_CONFIG.streetLightCount;
-
-  const itemsRef = useRef<StreetLightItem[]>([]);
-
-  useMemo(() => {
-    const arr: StreetLightItem[] = [];
-    const pairs = count / 2;
-    const spacing = ENVIRONMENT_CONFIG.loopSpan / pairs;
-    for (let i = 0; i < pairs; i++) {
-      const z = ENVIRONMENT_CONFIG.zMin + i * spacing;
-      arr.push({ z, side: -1 });
-      arr.push({ z: z + spacing * 0.5, side: 1 });
-    }
-    itemsRef.current = arr;
-  }, [count]);
+  const scrollRef = useRef(0);
 
   useFrame((_, rawDelta) => {
     const state = useGameStore.getState();
-    if (state.isPaused) return;
-
     const delta = Math.min(rawDelta, 0.1);
-    const speedMs = (state.busSpeedKmh * 1000) / 3600;
-    const dz = speedMs * delta;
+    const { zMin, zMax, loopSpan } = ENVIRONMENT_CONFIG;
+    if (!state.isPaused) {
+      scrollRef.current = (scrollRef.current + ((state.busSpeedKmh * 1000) / 3600) * delta) % loopSpan;
+    }
+    const scroll = scrollRef.current;
     const dummy = dummyRef.current;
+    const spacing = loopSpan / POLE_COUNT;
+    const x = ROAD_LAYOUT.medianX;
+    let closestZ = -999;
 
-    const poleXBase = ENVIRONMENT_CONFIG.roadWidth / 2 + 1.15;
-    let closestLeftZ = -999;
-    let closestRightZ = -999;
+    for (let i = 0; i < POLE_COUNT; i++) {
+      let z = zMin + i * spacing + scroll;
+      if (z > zMax) z -= loopSpan;
+      if (Math.abs(z + 6) < Math.abs(closestZ + 6)) closestZ = z;
 
-    for (let i = 0; i < itemsRef.current.length; i++) {
-      const item = itemsRef.current[i];
-      item.z += dz;
-      if (item.z > ENVIRONMENT_CONFIG.zMax) {
-        item.z -= ENVIRONMENT_CONFIG.loopSpan;
-      }
+      dummy.rotation.set(0, 0, 0);
+      dummy.scale.set(1, 1, 1);
+      dummy.position.set(x, 4.2, z);
+      dummy.updateMatrix();
+      poleMeshRef.current?.setMatrixAt(i, dummy.matrix);
 
-      const xPole = item.side * poleXBase;
+      for (let side = 0; side < 2; side++) {
+        const sign = side === 0 ? -1 : 1;
+        dummy.position.set(x + sign * (ARM_REACH / 2), 8.25, z);
+        dummy.rotation.set(0, 0, sign * 0.16);
+        dummy.updateMatrix();
+        armMeshRef.current?.setMatrixAt(i * 2 + side, dummy.matrix);
 
-      // Track closest street light to the bus (z around 0) for active point light pool
-      if (item.side === -1 && Math.abs(item.z) < Math.abs(closestLeftZ)) {
-        closestLeftZ = item.z;
-      }
-      if (item.side === 1 && Math.abs(item.z) < Math.abs(closestRightZ)) {
-        closestRightZ = item.z;
-      }
-
-      if (poleMeshRef.current) {
-        dummy.position.set(xPole, 3.4, item.z);
+        dummy.position.set(x + sign * ARM_REACH, 8.4, z);
         dummy.rotation.set(0, 0, 0);
-        dummy.scale.set(1, 1, 1);
         dummy.updateMatrix();
-        poleMeshRef.current.setMatrixAt(i, dummy.matrix);
-      }
-
-      if (armMeshRef.current) {
-        dummy.position.set(xPole - item.side * 0.85, 6.65, item.z);
-        dummy.rotation.set(0, 0, item.side * 0.22);
-        dummy.scale.set(1, 1, 1);
-        dummy.updateMatrix();
-        armMeshRef.current.setMatrixAt(i, dummy.matrix);
-      }
-
-      if (bulbMeshRef.current) {
-        dummy.position.set(xPole - item.side * 1.55, 6.72, item.z);
-        dummy.rotation.set(0, 0, 0);
-        dummy.scale.set(1, 1, 1);
-        dummy.updateMatrix();
-        bulbMeshRef.current.setMatrixAt(i, dummy.matrix);
+        bulbMeshRef.current?.setMatrixAt(i * 2 + side, dummy.matrix);
       }
     }
 
@@ -95,31 +65,24 @@ export const StreetLights: React.FC = () => {
     if (armMeshRef.current) armMeshRef.current.instanceMatrix.needsUpdate = true;
     if (bulbMeshRef.current) bulbMeshRef.current.instanceMatrix.needsUpdate = true;
 
-    if (nearLightLeftRef.current) {
-      nearLightLeftRef.current.position.set(-poleXBase + 1.5, 6.4, closestLeftZ);
-    }
-    if (nearLightRightRef.current) {
-      nearLightRightRef.current.position.set(poleXBase - 1.5, 6.4, closestRightZ);
-    }
+    nearLightLeftRef.current?.position.set(x - ARM_REACH - 2, 7.6, closestZ);
+    nearLightRightRef.current?.position.set(x + ARM_REACH + 1.5, 7.6, closestZ);
   });
 
   return (
     <group name="StreetLights">
-      {/* Vertical Steel Poles */}
-      <instancedMesh ref={poleMeshRef} args={[undefined, undefined, count]} castShadow>
-        <cylinderGeometry args={[0.07, 0.11, 6.8, 10]} />
+      <instancedMesh ref={poleMeshRef} args={[undefined, undefined, POLE_COUNT]} castShadow>
+        <cylinderGeometry args={[0.08, 0.13, 8.4, 10]} />
         <meshStandardMaterial color="#64748b" metalness={0.7} roughness={0.35} />
       </instancedMesh>
 
-      {/* Cantilever Lamp Arms */}
-      <instancedMesh ref={armMeshRef} args={[undefined, undefined, count]}>
-        <boxGeometry args={[1.85, 0.08, 0.08]} />
+      <instancedMesh ref={armMeshRef} args={[undefined, undefined, POLE_COUNT * 2]}>
+        <boxGeometry args={[ARM_REACH, 0.08, 0.08]} />
         <meshStandardMaterial color="#64748b" metalness={0.7} roughness={0.35} />
       </instancedMesh>
 
-      {/* Sodium-Vapor / LED Streetlight Lamp Heads */}
-      <instancedMesh ref={bulbMeshRef} args={[undefined, undefined, count]}>
-        <boxGeometry args={[0.52, 0.12, 0.26]} />
+      <instancedMesh ref={bulbMeshRef} args={[undefined, undefined, POLE_COUNT * 2]}>
+        <boxGeometry args={[0.6, 0.12, 0.28]} />
         <meshStandardMaterial
           color={isNight ? '#fef08a' : '#cbd5e1'}
           emissive="#f59e0b"
@@ -127,26 +90,13 @@ export const StreetLights: React.FC = () => {
         />
       </instancedMesh>
 
-      {/* Dynamic Pooled Point Lights for Night Highway Illumination */}
+      {/* Pooled point lights for night illumination around the bus */}
       {isNight && (
         <>
-          <pointLight
-            ref={nearLightLeftRef}
-            intensity={2.6}
-            distance={24}
-            decay={1.6}
-            color="#fbbf24"
-          />
-          <pointLight
-            ref={nearLightRightRef}
-            intensity={2.6}
-            distance={24}
-            decay={1.6}
-          color="#fbbf24"
-          />
+          <pointLight ref={nearLightLeftRef} intensity={3} distance={30} decay={1.6} color="#fbbf24" />
+          <pointLight ref={nearLightRightRef} intensity={3} distance={30} decay={1.6} color="#fbbf24" />
         </>
       )}
     </group>
   );
 };
-

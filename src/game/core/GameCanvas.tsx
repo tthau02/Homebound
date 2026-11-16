@@ -5,6 +5,8 @@ import { useGameStore } from '../../stores/useGameStore';
 import { GameWorld } from './GameWorld';
 import { PerformanceProbe3D } from './PerformanceProbe3D';
 import { CAMERA_PRESETS } from '../config/cameraConfig';
+import { QUALITY_PROFILES } from '../config/environmentConfig';
+import { PostEffects } from './PostEffects';
 
 export const GameCanvas: React.FC = () => {
   const graphicsQuality = useGameStore((state) => state.graphicsQuality);
@@ -27,17 +29,15 @@ export const GameCanvas: React.FC = () => {
           position: CAMERA_PRESETS.interior.position,
           fov: CAMERA_PRESETS.interior.fov,
           near: 0.1,
-          far: 240,
+          far: QUALITY_PROFILES[graphicsQuality].cameraFar,
         }}
         gl={{
           antialias: graphicsQuality !== 'low',
           powerPreference: 'high-performance',
-          toneMapping: THREE.ACESFilmicToneMapping,
-          toneMappingExposure: 1.25,
+          toneMapping: THREE.NeutralToneMapping,
+          toneMappingExposure: 1,
         }}
         onCreated={({ gl }) => {
-          gl.toneMapping = THREE.ACESFilmicToneMapping;
-          gl.toneMappingExposure = 1.25;
           if (enableShadows) {
             gl.shadowMap.type = THREE.PCFSoftShadowMap;
           }
@@ -46,6 +46,7 @@ export const GameCanvas: React.FC = () => {
         <Suspense fallback={null}>
           <GameWorld />
           <PerformanceProbe3D />
+          <PostEffects />
         </Suspense>
       </Canvas>
     </div>

@@ -165,6 +165,8 @@ interface EconomyLedgerStoreState {
     reason: string
   ) => { ok: boolean; message: string };
   adminToggleCatalogActive: (itemId: string, reason: string) => void;
+  /** Grant a one-time reward (e.g. story milestones). Ignored if the key was already processed. */
+  grantReward: (idempotencyKey: string, coins: number, reason: string) => boolean;
   catalog: ExtendedCatalogItem[];
 }
 
@@ -504,6 +506,41 @@ export const useEconomyLedgerStore = create<EconomyLedgerStoreState>(
         ok: true,
         message: `Nhận thưởng thành công +${quest.rewardCoins} Coin (${quest.title})!`,
       };
+    },
+
+    grantReward: (idempotencyKey, coins, reason) => {
+      const state = get();
+      if (coins <= 0 || state.processedIdempotencyKeys.includes(idempotencyKey)) {
+        return false;
+      }
+      const nextBalance = state.coinBalance + coins;
+      const nowIso = new Date().toISOString();
+      const tx: WalletTransactionRecord = {
+        id: `tx-rw-${Date.now()}`,
+        userId: 'player-local',
+        amount: coins,
+        balanceAfter: nextBalance,
+        type: 'reward',
+        reason,
+        idempotencyKey,
+        createdAt: nowIso,
+      };
+      const nextTransactions = [tx, ...state.transactions].slice(0, 60);
+      const nextKeys = [idempotencyKey, ...state.processedIdempotencyKeys].slice(0, 200);
+      set({
+        coinBalance: nextBalance,
+        transactions: nextTransactions,
+        processedIdempotencyKeys: nextKeys,
+      });
+      persistLedgerState({
+        coinBalance: nextBalance,
+        transactions: nextTransactions,
+        processedIdempotencyKeys: nextKeys,
+        ownedItemIds: state.ownedItemIds,
+        equippedLoadout: state.equippedLoadout,
+        auditLogs: state.auditLogs,
+      });
+      return true;
     },
 
     adminAdjustCoins: (delta, reason) => {

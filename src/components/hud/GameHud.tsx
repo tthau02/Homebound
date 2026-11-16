@@ -1,51 +1,80 @@
 import React from 'react';
-import { TopLeftBrandPanel } from './TopLeftBrandPanel';
-import { TopRightControlPanel } from './TopRightControlPanel';
-import { BottomTelemetryBar } from './BottomTelemetryBar';
-import { PassengerListDrawer } from './PassengerListDrawer';
+import { useStoryStore } from '../../stores/useStoryStore';
+import { useJourneyStore } from '../../stores/useJourneyStore';
 import { CharacterInteractionMenu } from './CharacterInteractionMenu';
-import { PlayerActionHud } from './PlayerActionHud';
 import { MultiplayerLobbyModal } from './MultiplayerLobbyModal';
 import { MultiplayerSocialHub } from './MultiplayerSocialHub';
 import { PlayerGuideHub } from './PlayerGuideHub';
 import { LiveOpsFloatingDock } from './LiveOpsFloatingDock';
 import { JourneyCompletionModal } from './JourneyCompletionModal';
-import { MobileArrowPad } from './MobileArrowPad';
+import { TouchJoystick } from './TouchJoystick';
+import { StartScreen } from './StartScreen';
+import { MobileJourneyProgress, TopBar } from './TopBar';
+import { TripStatus } from './TripStatus';
+import { ActionDock } from './ActionDock';
+import { GameMenu } from './GameMenu';
+import { CinematicOverlay, ObjectiveTracker, StoryDialog, ToastLayer } from './StoryHud';
 
+/**
+ * Phase 9 HUD layout — minimal by default:
+ *  top: menu · route progress · camera/coins
+ *  right: story objectives (+ social hub when online)
+ *  bottom-left: touch joystick (mobile) + trip status · bottom-right: context prompts, emotes, chat
+ * Everything else lives in the Esc menu (GameMenu).
+ */
 export const GameHud: React.FC = () => {
+  const hasStarted = useJourneyStore((s) => s.hasStarted);
+  const inCinematic = useStoryStore((s) => s.cinematic !== null);
+  const inDialogue = useStoryStore((s) => s.dialogue !== null);
+  const hideChrome = !hasStarted || inCinematic;
+  const hideDocks = hideChrome || inDialogue;
+
   return (
-    <div className="pointer-events-none fixed inset-0 z-30 flex flex-col justify-between p-2 sm:p-4">
-      {/* Top Bar: Left Brand + Passenger Drawer & Right Camera/Environment Controls */}
-      <header className="flex items-start justify-between gap-2 w-full">
-        <div className="flex flex-col gap-1.5 min-w-0">
-          <TopLeftBrandPanel />
-          <PassengerListDrawer />
-        </div>
+    <div className="pointer-events-none fixed inset-0 z-30">
+      <CinematicOverlay />
 
-        <div className="flex flex-col items-end gap-1.5 shrink-0">
-          <TopRightControlPanel />
-          <LiveOpsFloatingDock />
-          <MultiplayerSocialHub />
-        </div>
-      </header>
+      {!hideChrome && (
+        <>
+          <div className="absolute inset-x-0 top-0 space-y-2 p-3 transition-opacity duration-300 sm:p-4">
+            <TopBar />
+            <MobileJourneyProgress />
+            <ToastLayer />
+          </div>
 
-      {/* Character Context Interaction Menu (Right Side Floating Modal) */}
+          <div className="absolute right-3 top-[112px] flex flex-col items-end gap-2 transition-opacity duration-300 sm:right-4 md:top-[124px]">
+            <ObjectiveTracker />
+            <MultiplayerSocialHub />
+          </div>
+        </>
+      )}
+
+      {hasStarted && (
+        <>
+          <div
+            className={`absolute bottom-3 left-3 flex flex-col items-start gap-2 transition-opacity duration-300 sm:bottom-4 sm:left-4 ${hideDocks ? 'pointer-events-none opacity-0' : 'opacity-100'
+              }`}
+          >
+            <TouchJoystick />
+            <TripStatus />
+          </div>
+
+          <div
+            className={`absolute bottom-3 right-3 transition-opacity duration-300 sm:bottom-4 sm:right-4 ${hideDocks ? 'pointer-events-none opacity-0' : 'opacity-100'
+              }`}
+          >
+            <ActionDock />
+          </div>
+        </>
+      )}
+
+      <StartScreen />
       <CharacterInteractionMenu />
-
-      {/* Multiplayer Auth & Room Lobby Modal */}
+      <StoryDialog />
       <MultiplayerLobbyModal />
       <PlayerGuideHub />
       <JourneyCompletionModal />
-
-      {/* Bottom Area: Split Left & Right HUD Docks (Center stays completely open) */}
-      <footer className="w-full flex items-end justify-between gap-2 sm:gap-4">
-        <div className="flex flex-col items-start gap-1.5 min-w-0">
-          <MobileArrowPad />
-          <BottomTelemetryBar />
-        </div>
-
-        <PlayerActionHud />
-      </footer>
+      <LiveOpsFloatingDock />
+      <GameMenu />
     </div>
   );
 };

@@ -4,43 +4,116 @@ import * as THREE from 'three';
 import { CameraMode, useGameStore } from '../../stores/useGameStore';
 import { useCharacterStore } from '../../stores/useCharacterStore';
 import {
+  CAMERA_INPUT_CONFIG,
   CAMERA_PRESETS,
-  CAMERA_TRANSITION_CONFIG,
+  ORBIT_PRESETS,
 } from '../config/cameraConfig';
 import { busLiveOffset } from '../animation/useBusAnimation';
+import { cameraRig } from './cameraRig';
+import { isStoryDialogueOpen } from '../../stores/useStoryStore';
 
+const TWO_PI = Math.PI * 2;
+
+/** Wrap an angle into [-PI, PI]. */
+function wrapAngle(a: number): number {
+  return a - TWO_PI * Math.floor((a + Math.PI) / TWO_PI);
+}
+
+/** Return the equivalent of `target` closest to `reference` (shortest rotation). */
+function nearestEquivalentAngle(reference: number, target: number): number {
+  return reference + wrapAngle(target - reference);
+}
+
+/**
+ * Largest t in [0, maxT] for which `origin + dir * t` stays inside the axis-aligned box.
+ * Returns maxT when the origin itself is outside the box (no clamping applied).
+ */
+function clampRayToBox(
+  origin: THREE.Vector3,
+  dir: THREE.Vector3,
+  maxT: number,
+  box: typeof CAMERA_INPUT_CONFIG.cabinClamp
+): number {
+  if (
+    origin.x < box.minX || origin.x > box.maxX ||
+    origin.y < box.minY || origin.y > box.maxY ||
+    origin.z < box.minZ || origin.z > box.maxZ
+  ) {
+    return maxT;
+  }
+  let t = maxT;
+  if (dir.x > 1e-5) t = Math.min(t, (box.maxX - origin.x) / dir.x);
+  else if (dir.x < -1e-5) t = Math.min(t, (box.minX - origin.x) / dir.x);
+  if (dir.y > 1e-5) t = Math.min(t, (box.maxY - origin.y) / dir.y);
+  else if (dir.y < -1e-5) t = Math.min(t, (box.minY - origin.y) / dir.y);
+  if (dir.z > 1e-5) t = Math.min(t, (box.maxZ - origin.z) / dir.z);
+  else if (dir.z < -1e-5) t = Math.min(t, (box.minZ - origin.z) / dir.z);
+  return Math.max(0.15, t);
+}
+
+/**
+ * Unified spherical-orbit camera controller.
+ * - Full 360° yaw, clamped pitch, wheel / pinch zoom for all three modes.
+ * - Right-drag rotates immediately; left-drag rotates after a small threshold so
+ *   clicks on seats and passengers still work. `V` toggles pointer-lock free look.
+ * - Interior camera is kept inside the cabin volume so it never clips through walls.
+ */
 export const CameraManager: React.FC = () => {
   const { camera, gl, size } = useThree();
   const cameraMode = useGameStore((state) => state.cameraMode);
   const setCameraMode = useGameStore((state) => state.setCameraMode);
+  const focusedCharacterId = useCharacterStore((state) => state.focusedCharacterId);
 
-  // Pre-allocated vectors in refs to avoid per-frame allocations
-  const currentPosRef = useRef(
-    new THREE.Vector3(...CAMERA_PRESETS.interior.position)
-  );
-  const currentTargetRef = useRef(
-    new THREE.Vector3(...CAMERA_PRESETS.interior.target)
-  );
-  const desiredPosRef = useRef(
-    new THREE.Vector3(...CAMERA_PRESETS.interior.position)
-  );
-  const desiredTargetRef = useRef(
-    new THREE.Vector3(...CAMERA_PRESETS.interior.target)
-  );
+  // Orbit targets (set by input) and damped values (used for rendering)
+  const targetRef = useRef({ ...ORBIT_PRESETS.interior });
+  const currentRef = useRef({
+    yaw: ORBIT_PRESETS.interior.yaw,
+    pitch: ORBIT_PRESETS.interior.pitch,
+    distance: ORBIT_PRESETS.interior.distance,
+  });
 
-  // Subtle interactive look offset (drag or pointer movement)
-  const isDraggingRef = useRef(false);
-  const dragPrevRef = useRef({ x: 0, y: 0 });
-  const targetLookOffsetRef = useRef({ yaw: 0, pitch: 0 });
-  const currentLookOffsetRef = useRef({ yaw: 0, pitch: 0 });
+  // Pre-allocated math objects (no allocations inside useFrame)
+  const pivotDesiredRef = useRef(new THREE.Vector3(0, 2.2, 2));
+  const pivotCurrentRef = useRef(new THREE.Vector3(0, 2.2, 2));
+  const offsetDirRef = useRef(new THREE.Vector3());
+  const camPosRef = useRef(new THREE.Vector3());
+  const cinePosRef = useRef(new THREE.Vector3());
+  const cineTargetRef = useRef(new THREE.Vector3());
+  /** Tracks cabin ↔ pavement transitions so the follow distance adapts once per transition. */
+  const wasOutsideRef = useRef<boolean | null>(null);
 
-  // Reset look offset when switching camera modes
+  /** Apply a preset as the new orbit target, keeping rotation along the shortest path. */
+  const applyPreset = (mode: CameraMode, yawOverride?: number, distOverride?: number) => {
+    const preset = ORBIT_PRESETS[mode];
+    const cur = currentRef.current;
+    cur.yaw = wrapAngle(cur.yaw);
+    const t = targetRef.current;
+    Object.assign(t, preset);
+    t.yaw = nearestEquivalentAngle(cur.yaw, yawOverride ?? preset.yaw);
+    if (distOverride !== undefined) t.distance = distOverride;
+  };
+
+  // Reset orbit when switching camera modes
   useEffect(() => {
-    targetLookOffsetRef.current.yaw = 0;
-    targetLookOffsetRef.current.pitch = 0;
+    applyPreset(cameraMode);
   }, [cameraMode]);
 
-  // Keyboard shortcuts: 1 (Interior), 2 (Top-down), 3 (Rear Chase)
+  // Frame a focused passenger from the aisle side, facing them
+  useEffect(() => {
+    if (!focusedCharacterId) {
+      applyPreset(useGameStore.getState().cameraMode);
+      return;
+    }
+    const focused = useCharacterStore.getState().characters[focusedCharacterId];
+    if (!focused) return;
+    const mode = useGameStore.getState().cameraMode;
+    if (mode === 'interior') {
+      const side = Math.sign(focused.position[0]) || 1;
+      applyPreset('interior', Math.PI + side * 0.6, 1.6);
+    }
+  }, [focusedCharacterId]);
+
+  // Keyboard shortcuts: 1/2/3 switch camera, C recenters, V toggles pointer lock
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
       if (
@@ -51,18 +124,30 @@ export const CameraManager: React.FC = () => {
       }
 
       const modeMap: Record<string, CameraMode> = {
-        '1': 'interior',
+        Digit1: 'interior',
         Numpad1: 'interior',
-        '2': 'top-down',
+        Digit2: 'top-down',
         Numpad2: 'top-down',
-        '3': 'chase',
+        Digit3: 'chase',
         Numpad3: 'chase',
       };
 
-      const nextMode = modeMap[event.key] || modeMap[event.code];
-      if (nextMode) {
+      const nextMode = modeMap[event.code];
+      // Digits pick dialogue choices while a story dialogue is open
+      if (nextMode && !isStoryDialogueOpen()) {
         useCharacterStore.getState().setFocusedCharacterId(null);
         setCameraMode(nextMode);
+        return;
+      }
+
+      if (event.code === 'KeyC') {
+        applyPreset(useGameStore.getState().cameraMode);
+      } else if (event.code === 'KeyV') {
+        if (document.pointerLockElement === gl.domElement) {
+          document.exitPointerLock();
+        } else {
+          gl.domElement.requestPointerLock();
+        }
       }
     };
 
@@ -70,64 +155,146 @@ export const CameraManager: React.FC = () => {
     return () => {
       window.removeEventListener('keydown', handleKeyDown);
     };
-  }, [setCameraMode]);
+  }, [setCameraMode, gl.domElement]);
 
-  // Pointer drag / touch look adjustment
+  // Pointer, wheel and touch input
   useEffect(() => {
-    const domElement = gl.domElement;
-    domElement.style.touchAction = 'none';
+    const el = gl.domElement;
+    el.style.touchAction = 'none';
 
-    const handlePointerDown = (e: PointerEvent) => {
-      isDraggingRef.current = true;
-      dragPrevRef.current.x = e.clientX;
-      dragPrevRef.current.y = e.clientY;
+    const pointers = new Map<number, { x: number; y: number }>();
+    let primaryId: number | null = null;
+    let rotating = false;
+    let pendingLeftDrag = false;
+    let dragStart = { x: 0, y: 0 };
+    let lastPinchDist = 0;
+
+    const rotateBy = (dx: number, dy: number) => {
+      const { mouseSensitivity, invertCameraY } = useGameStore.getState();
+      const speed = CAMERA_INPUT_CONFIG.rotateSpeed * mouseSensitivity;
+      const t = targetRef.current;
+      t.yaw -= dx * speed;
+      t.pitch = THREE.MathUtils.clamp(
+        t.pitch + dy * speed * (invertCameraY ? -1 : 1),
+        t.minPitch,
+        t.maxPitch
+      );
     };
 
-    const handlePointerMove = (e: PointerEvent) => {
-      if (isDraggingRef.current) {
-        const dx = (e.clientX - dragPrevRef.current.x) * 0.0035;
-        const dy = (e.clientY - dragPrevRef.current.y) * 0.0025;
-        dragPrevRef.current.x = e.clientX;
-        dragPrevRef.current.y = e.clientY;
+    const zoomBy = (factor: number) => {
+      const t = targetRef.current;
+      t.distance = THREE.MathUtils.clamp(t.distance * factor, t.minDistance, t.maxDistance);
+    };
 
-        targetLookOffsetRef.current.yaw = THREE.MathUtils.clamp(
-          targetLookOffsetRef.current.yaw - dx,
-          -CAMERA_TRANSITION_CONFIG.interiorMaxYaw,
-          CAMERA_TRANSITION_CONFIG.interiorMaxYaw
-        );
-        targetLookOffsetRef.current.pitch = THREE.MathUtils.clamp(
-          targetLookOffsetRef.current.pitch - dy,
-          -CAMERA_TRANSITION_CONFIG.interiorMaxPitch,
-          CAMERA_TRANSITION_CONFIG.interiorMaxPitch
-        );
-      } else if (e.pointerType === 'mouse') {
-        const normX = (e.clientX / window.innerWidth) * 2 - 1;
-        const normY = (e.clientY / window.innerHeight) * 2 - 1;
-        targetLookOffsetRef.current.yaw = THREE.MathUtils.lerp(
-          targetLookOffsetRef.current.yaw,
-          -normX * 0.16,
-          0.08
-        );
-        targetLookOffsetRef.current.pitch = THREE.MathUtils.lerp(
-          targetLookOffsetRef.current.pitch,
-          -normY * 0.08,
-          0.08
-        );
+    // After a drag, swallow the click that follows so seats/passengers are not selected
+    const swallowClick = (e: MouseEvent) => {
+      e.stopPropagation();
+      e.preventDefault();
+    };
+    const armClickSwallow = () => {
+      window.addEventListener('click', swallowClick, { capture: true, once: true });
+      window.setTimeout(() => {
+        window.removeEventListener('click', swallowClick, { capture: true });
+      }, 0);
+    };
+
+    const handlePointerDown = (e: PointerEvent) => {
+      pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+      if (pointers.size === 2) {
+        // Begin pinch: stop rotating
+        rotating = false;
+        pendingLeftDrag = false;
+        const [a, b] = Array.from(pointers.values());
+        lastPinchDist = Math.hypot(a.x - b.x, a.y - b.y);
+        return;
+      }
+      primaryId = e.pointerId;
+      dragStart = { x: e.clientX, y: e.clientY };
+      if (e.button === 2) {
+        rotating = true;
+        el.setPointerCapture(e.pointerId);
+      } else if (e.button === 0) {
+        pendingLeftDrag = true;
       }
     };
 
-    const handlePointerUp = () => {
-      isDraggingRef.current = false;
+    const handlePointerMove = (e: PointerEvent) => {
+      // Pointer-lock free look: every mouse move rotates
+      if (document.pointerLockElement === el) {
+        rotateBy(e.movementX, e.movementY);
+        cameraRig.isRotating = true;
+        return;
+      }
+
+      const prev = pointers.get(e.pointerId);
+      if (!prev) return;
+      const dx = e.clientX - prev.x;
+      const dy = e.clientY - prev.y;
+      prev.x = e.clientX;
+      prev.y = e.clientY;
+
+      if (pointers.size === 2) {
+        const [a, b] = Array.from(pointers.values());
+        const dist = Math.hypot(a.x - b.x, a.y - b.y);
+        if (lastPinchDist > 0 && dist > 0) zoomBy(lastPinchDist / dist);
+        lastPinchDist = dist;
+        return;
+      }
+
+      if (e.pointerId !== primaryId) return;
+
+      if (pendingLeftDrag) {
+        const moved = Math.hypot(e.clientX - dragStart.x, e.clientY - dragStart.y);
+        if (moved >= CAMERA_INPUT_CONFIG.dragThresholdPx) {
+          pendingLeftDrag = false;
+          rotating = true;
+          el.setPointerCapture(e.pointerId);
+        }
+      }
+
+      if (rotating) {
+        rotateBy(dx, dy);
+        cameraRig.isRotating = true;
+      }
     };
 
-    domElement.addEventListener('pointerdown', handlePointerDown);
-    window.addEventListener('pointermove', handlePointerMove);
-    window.addEventListener('pointerup', handlePointerUp);
+    const handlePointerUp = (e: PointerEvent) => {
+      pointers.delete(e.pointerId);
+      if (e.pointerId === primaryId) {
+        if (rotating) armClickSwallow();
+        rotating = false;
+        pendingLeftDrag = false;
+        primaryId = null;
+        cameraRig.isRotating = false;
+      }
+      if (pointers.size < 2) lastPinchDist = 0;
+      if (el.hasPointerCapture(e.pointerId)) el.releasePointerCapture(e.pointerId);
+    };
+
+    const handleWheel = (e: WheelEvent) => {
+      e.preventDefault();
+      const notches = THREE.MathUtils.clamp(e.deltaY / 100, -3, 3);
+      zoomBy(1 + notches * CAMERA_INPUT_CONFIG.zoomStep);
+    };
+
+    const handleContextMenu = (e: MouseEvent) => e.preventDefault();
+
+    el.addEventListener('pointerdown', handlePointerDown);
+    el.addEventListener('pointermove', handlePointerMove);
+    el.addEventListener('pointerup', handlePointerUp);
+    el.addEventListener('pointercancel', handlePointerUp);
+    el.addEventListener('wheel', handleWheel, { passive: false });
+    el.addEventListener('contextmenu', handleContextMenu);
 
     return () => {
-      domElement.removeEventListener('pointerdown', handlePointerDown);
-      window.removeEventListener('pointermove', handlePointerMove);
-      window.removeEventListener('pointerup', handlePointerUp);
+      el.removeEventListener('pointerdown', handlePointerDown);
+      el.removeEventListener('pointermove', handlePointerMove);
+      el.removeEventListener('pointerup', handlePointerUp);
+      el.removeEventListener('pointercancel', handlePointerUp);
+      el.removeEventListener('wheel', handleWheel);
+      el.removeEventListener('contextmenu', handleContextMenu);
+      window.removeEventListener('click', swallowClick, { capture: true });
+      if (document.pointerLockElement === el) document.exitPointerLock();
     };
   }, [gl.domElement]);
 
@@ -136,133 +303,109 @@ export const CameraManager: React.FC = () => {
     const activeMode = useGameStore.getState().cameraMode;
     const preset = CAMERA_PRESETS[activeMode];
 
-    const charStore = useCharacterStore.getState();
-    const focusedId = charStore.focusedCharacterId;
-    const focusedChar = focusedId ? charStore.characters[focusedId] : null;
-    const playerChar = charStore.characters[charStore.playerId];
-
-    // Detect portrait orientation (< 1.0) on mobile/narrow viewports
     const aspect = size.width / Math.max(1, size.height);
     const isPortrait = aspect < 1.0;
 
-    // Smooth exponential damping factor (~0.45s - 0.7s visual settle time)
-    const dampFactor = 1 - Math.exp(-7.5 * delta);
-    const lookDampFactor = 1 - Math.exp(-10.0 * delta);
+    // Cinematic override (story cutscenes)
+    if (cameraRig.cinematic.active) {
+      const k = 1 - Math.exp(-3.5 * delta);
+      cinePosRef.current.lerp(camPosRef.current.set(...cameraRig.cinematic.position), k);
+      cineTargetRef.current.lerp(offsetDirRef.current.set(...cameraRig.cinematic.target), k);
+      camera.position.copy(cinePosRef.current);
+      camera.lookAt(cineTargetRef.current);
+      return;
+    }
+    cinePosRef.current.copy(camera.position);
+    cineTargetRef.current.copy(pivotCurrentRef.current);
 
-    currentLookOffsetRef.current.yaw = THREE.MathUtils.lerp(
-      currentLookOffsetRef.current.yaw,
-      targetLookOffsetRef.current.yaw,
-      lookDampFactor
-    );
-    currentLookOffsetRef.current.pitch = THREE.MathUtils.lerp(
-      currentLookOffsetRef.current.pitch,
-      targetLookOffsetRef.current.pitch,
-      lookDampFactor
-    );
+    // ---- 1. Resolve pivot for the active mode ----
+    const charStore = useCharacterStore.getState();
+    const focusedId = charStore.focusedCharacterId;
+    const focusedChar = focusedId ? charStore.characters[focusedId] : null;
+    const subject = focusedChar ?? charStore.characters[charStore.playerId] ?? null;
+    let insideCabin = false;
 
-    const yaw = currentLookOffsetRef.current.yaw;
-    const pitch = currentLookOffsetRef.current.pitch;
+    // One-shot yaw requests (e.g. face the bus when spawning on the kerb)
+    if (cameraRig.pendingYaw !== null) {
+      targetRef.current.yaw = nearestEquivalentAngle(currentRef.current.yaw, cameraRig.pendingYaw);
+      cameraRig.pendingYaw = null;
+    }
 
     if (activeMode === 'interior') {
-      if (focusedChar) {
-        // Focus camera inside the aisle looking cleanly at the selected passenger
-        const camZOffset = isPortrait ? 2.85 : 2.35;
-        const camZ = Math.min(5.6, Math.max(-1.2, focusedChar.position[2] + camZOffset));
-        desiredPosRef.current.set(
-          busLiveOffset.xSway + yaw * 0.15,
-          (isPortrait ? 2.22 : 2.12) + busLiveOffset.y * 0.85,
-          camZ
-        );
-        desiredTargetRef.current.set(
-          focusedChar.position[0] * 0.65 + busLiveOffset.xSway - yaw * 2.5,
-          1.62 + busLiveOffset.y * 0.65 + pitch * 1.8,
-          focusedChar.position[2] - 0.4
+      if (subject) {
+        const headHeight = subject.state === 'sitting' ? 1.12 : 1.5;
+        const isOutside = subject.position[0] > 1.35;
+        insideCabin = !isOutside;
+        // Pull back for a third-person view on the pavement, tuck in again inside the cabin
+        if (wasOutsideRef.current !== isOutside) {
+          const t = targetRef.current;
+          if (isOutside) t.distance = Math.max(t.distance, CAMERA_INPUT_CONFIG.outdoorDistance);
+          else if (wasOutsideRef.current !== null) t.distance = Math.min(t.distance, ORBIT_PRESETS.interior.distance);
+          wasOutsideRef.current = isOutside;
+        }
+        pivotDesiredRef.current.set(
+          subject.position[0] + (isOutside ? 0 : busLiveOffset.xSway),
+          subject.position[1] + headHeight + (isOutside ? 0 : busLiveOffset.y * 0.85),
+          subject.position[2]
         );
       } else {
-        if (playerChar && playerChar.position[0] > 1.35) {
-          // Player is outside exploring the station platform -> smooth 3rd-person camera following player
-          desiredPosRef.current.set(
-            playerChar.position[0] - 2.8 - yaw * 1.5,
-            (isPortrait ? 2.5 : 2.2) + pitch * 1.2,
-            playerChar.position[2] + (isPortrait ? 3.4 : 2.8)
-          );
-          desiredTargetRef.current.set(
-            playerChar.position[0],
-            1.1,
-            playerChar.position[2]
-          );
-        } else {
-          // Follow player softly along the aisle while keeping cabin view clear in both landscape and portrait
-          const followOffset = isPortrait ? 3.15 : 2.6;
-          const followZ = playerChar
-            ? Math.min(5.6, Math.max(-0.6, playerChar.position[2] + followOffset))
-            : preset.position[2] + (isPortrait ? 0.45 : 0);
-          desiredPosRef.current.set(
-            preset.position[0] + busLiveOffset.xSway + yaw * 0.18,
-            (isPortrait ? 2.24 : preset.position[1]) + busLiveOffset.y * 0.85,
-            followZ
-          );
-          desiredTargetRef.current.set(
-            preset.target[0] + busLiveOffset.xSway - yaw * 4.5,
-            preset.target[1] + (isPortrait ? 0.12 : 0) + busLiveOffset.y * 0.65 + pitch * 2.4,
-            preset.target[2]
-          );
-        }
+        insideCabin = true;
+        pivotDesiredRef.current.set(busLiveOffset.xSway, 2.0, 3.5);
       }
     } else if (activeMode === 'top-down') {
       if (focusedChar) {
-        desiredPosRef.current.set(
-          focusedChar.position[0] * 0.35 + busLiveOffset.xSway * 0.3,
-          isPortrait ? 15.5 : 12.4,
-          focusedChar.position[2] + 0.3
-        );
-        desiredTargetRef.current.set(
-          focusedChar.position[0] * 0.5 + busLiveOffset.xSway * 0.3,
-          1.2,
-          focusedChar.position[2]
-        );
+        pivotDesiredRef.current.set(focusedChar.position[0] * 0.5, 1.2, focusedChar.position[2]);
       } else {
-        desiredPosRef.current.set(
-          preset.position[0] + busLiveOffset.xSway * 0.3 - yaw * 0.8,
-          isPortrait ? 17.0 : preset.position[1],
-          preset.position[2] + pitch * 0.8
-        );
-        desiredTargetRef.current.set(
-          preset.target[0] + busLiveOffset.xSway * 0.3,
-          preset.target[1],
-          preset.target[2]
-        );
+        pivotDesiredRef.current.set(busLiveOffset.xSway * 0.3, 1.2, -0.3);
       }
     } else {
-      // Rear Chase camera: follow behind the bus with dampened sway and portrait-adapted distance
-      const chaseZ = isPortrait ? preset.position[2] + 3.2 : preset.position[2];
-      const chaseY = isPortrait ? preset.position[1] + 1.1 : preset.position[1];
-      desiredPosRef.current.set(
-        preset.position[0] + busLiveOffset.xSway * 0.55 - yaw * 1.6,
-        chaseY + busLiveOffset.y * 0.35 - pitch * 0.8,
-        chaseZ
-      );
-      desiredTargetRef.current.set(
-        preset.target[0] + busLiveOffset.xSway * 0.4 + yaw * 2.5,
-        preset.target[1] + (isPortrait ? 0.3 : 0) + busLiveOffset.y * 0.25 + pitch * 1.6,
-        preset.target[2]
-      );
+      // Look ahead of the bus so the road in front stays in frame
+      pivotDesiredRef.current.set(busLiveOffset.xSway * 0.5, 1.8 + busLiveOffset.y * 0.3, -8);
     }
 
-    currentPosRef.current.lerp(desiredPosRef.current, dampFactor);
-    currentTargetRef.current.lerp(desiredTargetRef.current, dampFactor);
+    // ---- 2. Damp orbit values ----
+    const rotK = 1 - Math.exp(-CAMERA_INPUT_CONFIG.rotationDamping * delta);
+    const zoomK = 1 - Math.exp(-CAMERA_INPUT_CONFIG.zoomDamping * delta);
+    const pivotK = 1 - Math.exp(-CAMERA_INPUT_CONFIG.pivotDamping * delta);
 
-    camera.position.copy(currentPosRef.current);
-    camera.lookAt(currentTargetRef.current);
+    const cur = currentRef.current;
+    const tgt = targetRef.current;
+    cur.yaw += (tgt.yaw - cur.yaw) * rotK;
+    cur.pitch += (tgt.pitch - cur.pitch) * rotK;
+    cur.distance += (tgt.distance - cur.distance) * zoomK;
+    pivotCurrentRef.current.lerp(pivotDesiredRef.current, pivotK);
 
-    // Dynamic FOV compensation for mobile portrait mode to prevent tunnel-vision zoom
+    cameraRig.yaw = cur.yaw;
+    cameraRig.pitch = cur.pitch;
+
+    // ---- 3. Spherical offset → camera position ----
+    const cosP = Math.cos(cur.pitch);
+    const dir = offsetDirRef.current.set(
+      Math.sin(cur.yaw) * cosP,
+      Math.sin(cur.pitch),
+      Math.cos(cur.yaw) * cosP
+    );
+
+    let dist = cur.distance * (isPortrait && activeMode !== 'interior' ? 1.25 : 1);
+    if (insideCabin) {
+      dist = clampRayToBox(pivotCurrentRef.current, dir, dist, CAMERA_INPUT_CONFIG.cabinClamp);
+    }
+
+    const camPos = camPosRef.current.copy(pivotCurrentRef.current).addScaledVector(dir, dist);
+    // Never go below the ground plane
+    if (camPos.y < 0.35) camPos.y = 0.35;
+
+    camera.position.copy(camPos);
+    camera.lookAt(pivotCurrentRef.current);
+
+    // ---- 4. Portrait FOV compensation ----
     if (camera instanceof THREE.PerspectiveCamera) {
       const targetFov = isPortrait
         ? THREE.MathUtils.clamp(preset.fov / (aspect * 1.12), preset.fov, 84)
         : preset.fov;
 
       if (Math.abs(camera.fov - targetFov) > 0.05) {
-        camera.fov = THREE.MathUtils.lerp(camera.fov, targetFov, dampFactor);
+        camera.fov = THREE.MathUtils.lerp(camera.fov, targetFov, zoomK);
         camera.updateProjectionMatrix();
       }
     }

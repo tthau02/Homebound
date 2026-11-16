@@ -10,6 +10,7 @@ import { useJourneyStore } from '../../stores/useJourneyStore';
 import { useEconomyLedgerStore } from '../../stores/useEconomyLedgerStore';
 import { useLiveOpsStore } from '../../stores/useLiveOpsStore';
 import { useTelemetryStore } from '../../stores/useTelemetryStore';
+import { PLATFORM_EDGE_X } from '../config/stationConfig';
 
 export const SeatManager: React.FC = () => {
   const seats = useSeatStore((state) => state.seats);
@@ -22,6 +23,7 @@ export const SeatManager: React.FC = () => {
   );
 
   // Call every Zustand hook unconditionally to strictly obey React Rules of Hooks
+  const hasStarted = useJourneyStore((s) => s.hasStarted);
   const isGuideOpen = useGameStore((s) => s.isGuideOpen);
   const isLobbyOpen = useMultiplayerStore((s) => s.isLobbyModalOpen);
   const isEconomyOpen = useEconomyLedgerStore((s) => s.isModalOpen);
@@ -33,6 +35,7 @@ export const SeatManager: React.FC = () => {
   const isDiagnosticsOpen = useTelemetryStore((s) => s.isDiagnosticsOpen);
 
   const isAnyModalOpen =
+    !hasStarted ||
     isGuideOpen ||
     isLobbyOpen ||
     isEconomyOpen ||
@@ -80,6 +83,13 @@ export const SeatManager: React.FC = () => {
       return;
     }
 
+    // From the pavement the only way in is the open door
+    const player = charStore.characters[playerId];
+    if (player && player.position[0] >= PLATFORM_EDGE_X - 0.05 && !useJourneyStore.getState().doorOpen) {
+      interStore.showStatusToast('Cửa xe đang đóng, chưa lên xe được.');
+      return;
+    }
+
     const started = charStore.commandMoveToSeat(playerId, seatId);
     if (started) {
       interStore.showStatusToast(`Đang di chuyển tới ghế ${seatId}...`);
@@ -121,14 +131,14 @@ export const SeatManager: React.FC = () => {
           style={{ pointerEvents: 'none' }}
         >
           <div
-            className={`px-2.5 py-1 rounded-lg text-[11px] font-semibold whitespace-nowrap border shadow-lg backdrop-blur-md select-none pointer-events-none ${
+            className={`px-2.5 py-1 rounded-lg text-xs font-semibold whitespace-nowrap border shadow-lg select-none pointer-events-none ${
               hoveredSeat.occupied
                 ? 'bg-rose-950/90 text-rose-200 border-rose-500/40'
                 : 'bg-emerald-950/90 text-emerald-200 border-emerald-500/50'
             }`}
           >
             Ghế {hoveredSeat.seatId} •{' '}
-            {hoveredSeat.occupied ? 'Đã có khách' : 'Trống (Click để ngồi)'}
+            {hoveredSeat.occupied ? 'Đã có khách' : 'Trống · bấm để ngồi'}
           </div>
         </Html>
       )}

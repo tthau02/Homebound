@@ -225,6 +225,8 @@ export const DriverCabin: React.FC = () => {
             transparent
             opacity={0.28}
             roughness={0.1}
+            envMapIntensity={0.25}
+            depthWrite={false}
             metalness={0.1}
           />
         </mesh>
@@ -261,6 +263,8 @@ export const DriverCabin: React.FC = () => {
             transparent
             opacity={0.28}
             roughness={0.1}
+            envMapIntensity={0.25}
+            depthWrite={false}
             metalness={0.1}
           />
         </mesh>

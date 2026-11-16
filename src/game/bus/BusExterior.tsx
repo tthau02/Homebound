@@ -61,6 +61,8 @@ export const BusExterior: React.FC<BusExteriorProps> = ({ cutawayRoof }) => {
             transparent
             opacity={0.22}
             roughness={0.08}
+            envMapIntensity={0.25}
+            depthWrite={false}
             metalness={0.1}
           />
         </mesh>
@@ -112,6 +114,8 @@ export const BusExterior: React.FC<BusExteriorProps> = ({ cutawayRoof }) => {
             transparent
             opacity={0.22}
             roughness={0.08}
+            envMapIntensity={0.25}
+            depthWrite={false}
             metalness={0.1}
           />
         </mesh>
@@ -136,6 +140,8 @@ export const BusExterior: React.FC<BusExteriorProps> = ({ cutawayRoof }) => {
                 transparent
                 opacity={0.32}
                 roughness={0.1}
+                envMapIntensity={0.25}
+                depthWrite={false}
                 metalness={0.15}
               />
             </mesh>
@@ -206,6 +212,8 @@ export const BusExterior: React.FC<BusExteriorProps> = ({ cutawayRoof }) => {
             transparent
             opacity={0.22}
             roughness={0.06}
+            envMapIntensity={0.25}
+            depthWrite={false}
             metalness={0.1}
           />
         </mesh>
@@ -349,6 +357,8 @@ export const BusExterior: React.FC<BusExteriorProps> = ({ cutawayRoof }) => {
             transparent
             opacity={0.25}
             roughness={0.1}
+            envMapIntensity={0.25}
+            depthWrite={false}
           />
         </mesh>
 

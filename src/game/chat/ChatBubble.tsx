@@ -29,7 +29,8 @@ export const ChatBubble: React.FC<ChatBubbleProps> = ({
   activeEmote,
   chatBubble,
 }) => {
-  // Check if any HUD modal is currently open. If open, suppress in-world bubbles so they NEVER overlay modals
+  // Check if any HUD modal is currently open or title screen is active so bubbles never overlay modals
+  const hasStarted = useJourneyStore((s) => s.hasStarted);
   const isEconomyOpen = useEconomyLedgerStore((s) => s.isModalOpen);
   const isLobbyOpen = useMultiplayerStore((s) => s.isLobbyModalOpen);
   const isGuideOpen = useGameStore((s) => s.isGuideOpen);
@@ -41,6 +42,7 @@ export const ChatBubble: React.FC<ChatBubbleProps> = ({
   const isDiagnosticsOpen = useTelemetryStore((s) => s.isDiagnosticsOpen);
 
   if (
+    !hasStarted ||
     isEconomyOpen ||
     isLobbyOpen ||
     isGuideOpen ||
@@ -53,7 +55,7 @@ export const ChatBubble: React.FC<ChatBubbleProps> = ({
   }
 
   // Keep vertical height well below the cabin ceiling (ceilingY = 2.88m, floorY = 0.72m)
-  const bubbleY = isSeated ? 1.28 : 1.62;
+  const bubbleY = isSeated ? 1.5 : 1.9;
   const emoteDef = activeEmote ? EMOTE_DEFINITIONS[activeEmote] : null;
 
   // Only render overlay if there is an active chat bubble, emote, or the character is a focused NPC (not the player)
@@ -77,14 +79,14 @@ export const ChatBubble: React.FC<ChatBubbleProps> = ({
       <div className="flex flex-col items-center select-none pointer-events-none">
         {/* Compact, Crisp Chat Message Bubble */}
         {chatBubble && (
-          <div className="mb-1 w-max max-w-[170px] sm:max-w-[210px] px-2.5 py-1.5 rounded-xl bg-slate-950/95 text-slate-100 border border-amber-400/50 shadow-xl backdrop-blur-md animate-fade-in pointer-events-none">
+          <div className="mb-1 w-max max-w-[200px] sm:max-w-[240px] px-3 py-2 rounded-xl bg-ink-950/95 text-ink-100 border border-white/15 shadow-hud animate-fade-in pointer-events-none">
             <div className="flex items-center gap-1.5 mb-0.5">
               <span className="text-xs">{avatar}</span>
-              <span className="text-[10px] font-bold text-amber-400 truncate max-w-[120px]">
+              <span className="text-xs font-semibold text-accent-soft truncate max-w-[150px]">
                 {characterName}
               </span>
             </div>
-            <p className="text-[11px] leading-snug text-white break-words">
+            <p className="text-[13px] leading-snug text-white break-words">
               {chatBubble.text}
             </p>
           </div>
@@ -92,14 +94,14 @@ export const ChatBubble: React.FC<ChatBubbleProps> = ({
 
         {/* Compact Active Emote Badge */}
         {emoteDef && !chatBubble && (
-          <div className="mb-0.5 px-2 py-0.5 rounded-full bg-amber-500/95 text-slate-950 font-bold text-xs shadow-lg flex items-center gap-1 animate-bounce">
+          <div className="mb-0.5 px-2 py-0.5 rounded-full bg-accent text-ink-950 font-bold text-xs shadow-hud flex items-center gap-1 animate-fade-in">
             <span className="text-sm">{emoteDef.emoji}</span>
           </div>
         )}
 
         {/* Compact Name Tag ONLY for Selected / Focused NPC */}
         {isSelectedOrFocused && !isPlayer && !chatBubble && !emoteDef && (
-          <div className="px-2 py-0.5 rounded-full text-[10px] font-semibold border shadow-md whitespace-nowrap flex items-center gap-1 bg-slate-900/90 text-sky-200 border-sky-400/50 backdrop-blur-md">
+          <div className="px-2.5 py-1 rounded-full text-xs font-semibold border shadow-hud whitespace-nowrap flex items-center gap-1 bg-ink-900/95 text-ink-100 border-white/15">
             <span>{avatar}</span>
             <span>{characterName}</span>
           </div>

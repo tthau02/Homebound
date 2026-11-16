@@ -5,6 +5,11 @@ export interface ReleaseNoteEntry {
 
 export const RELEASE_NOTES: ReleaseNoteEntry[] = [
   {
+    title: 'Phase 9: Hình ảnh & trải nghiệm mới',
+    details:
+      'Camera 360°, bầu trời và hậu kỳ mới, bản đồ đổi cảnh theo tuyến, nhân vật stylized, HUD tối giản với menu Esc và Chương 1 "Lên phố".',
+  },
+  {
     title: 'Chuyến đi và multiplayer P2P',
     details:
       'Tạo phòng PeerJS/WebRTC, đồng bộ hành khách, chat, ghế, tuyến và hoạt động tại trạm dừng.',

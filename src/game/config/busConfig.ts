@@ -58,5 +58,11 @@ export const INITIAL_PASSENGERS: PassengerSeatInfo[] = [
   { id: 'p8', seatLabel: '5D', name: 'Đức Thịnh', row: 4, side: 'right', col: 'window', occupied: true, shirtColor: '#0284c7' },
   { id: 'p9', seatLabel: '6A', name: 'Hải Yến', row: 5, side: 'left', col: 'window', occupied: true, shirtColor: '#16a34a' },
   { id: 'p10', seatLabel: '6C', name: 'Tuấn Kiệt', row: 5, side: 'right', col: 'aisle', occupied: true, shirtColor: '#9333ea' },
+  { id: 'p11', seatLabel: '2D', name: 'Bà Tư', row: 1, side: 'right', col: 'window', occupied: true, shirtColor: '#7c5a3a' },
+  { id: 'p12', seatLabel: '4D', name: 'Gia Huy', row: 3, side: 'right', col: 'window', occupied: true, shirtColor: '#f1f5f9' },
+  { id: 'p13', seatLabel: '6D', name: 'Thu Hà', row: 5, side: 'right', col: 'window', occupied: true, shirtColor: '#f59e0b' },
+  { id: 'p14', seatLabel: '7A', name: 'Chú Sơn', row: 6, side: 'left', col: 'window', occupied: true, shirtColor: '#334155' },
+  { id: 'p15', seatLabel: '7B', name: 'Cô Liên', row: 6, side: 'left', col: 'aisle', occupied: true, shirtColor: '#be123c' },
+  { id: 'p16', seatLabel: '7D', name: 'Bảo Ngọc', row: 6, side: 'right', col: 'window', occupied: true, shirtColor: '#0ea5e9' },
 ];
 

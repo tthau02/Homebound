@@ -1,7 +1,10 @@
 import { create } from 'zustand';
 import {
+  BodyType,
+  CharacterAccessory,
   CharacterAnimationType,
   CharacterData,
+  HairStyle,
   CharacterStateType,
   EMOTE_DEFINITIONS,
   EmoteType,
@@ -12,6 +15,7 @@ import {
   SEAT_COLUMNS_X,
   SEAT_ROWS_Z,
 } from '../game/config/busConfig';
+import { DOOR_Z, PLATFORM_EDGE_X, PLATFORM_Y, STATION_LAYOUTS } from '../game/config/stationConfig';
 import { useSeatStore } from './useSeatStore';
 
 interface CharacterStoreState {
@@ -43,7 +47,16 @@ interface CharacterStoreState {
 
 const NPC_PROFILES: Record<
   string,
-  { avatar: string; hometown: string; bio: string; activity: string; hair: string }
+  {
+    avatar: string;
+    hometown: string;
+    bio: string;
+    activity: string;
+    hair: string;
+    bodyType?: BodyType;
+    hairStyle?: HairStyle;
+    accessories?: CharacterAccessory[];
+  }
 > = {
   p1: {
     avatar: '👩‍💻',
@@ -51,13 +64,19 @@ const NPC_PROFILES: Record<
     bio: 'Kỹ sư phần mềm bắt xe từ Ngã tư 168 Bình Lục lên văn phòng Cầu Giấy làm việc đầu tuần.',
     activity: 'Đang ngắm cảnh bên cửa sổ',
     hair: '#18181b',
+    bodyType: 'fem',
+    hairStyle: 'long',
+    accessories: ['glasses'],
   },
   p2: {
     avatar: '👨‍🌾',
     hometown: 'Đồn Xá, Bình Lục',
     bio: 'Bác nông dân hiếu khách ở gần điểm Bánh mì 168, mang chuối Ngự & bánh đa lên Hà Nội thăm cháu.',
     activity: 'Đang nghỉ ngơi trên ghế',
-    hair: '#27272a',
+    hair: '#9ca3af',
+    bodyType: 'masc',
+    hairStyle: 'buzz',
+    accessories: ['nonLa'],
   },
   p3: {
     avatar: '👩‍🎨',
@@ -65,6 +84,9 @@ const NPC_PROFILES: Record<
     bio: 'Nhà thiết kế đồ họa tự do đón xe tại Nút giao Liêm Tuyền đi Mỹ Đình.',
     activity: 'Đang nghe nhạc thư giãn',
     hair: '#3f2314',
+    bodyType: 'fem',
+    hairStyle: 'bun',
+    accessories: [],
   },
   p4: {
     avatar: '👨‍💼',
@@ -72,6 +94,9 @@ const NPC_PROFILES: Record<
     bio: 'Chuyên viên kinh doanh thường xuyên đi công tác tuyến Mỹ Đình – Phủ Lý – Bình Lục.',
     activity: 'Đang trò chuyện vui vẻ',
     hair: '#0f172a',
+    bodyType: 'masc',
+    hairStyle: 'sidePart',
+    accessories: [],
   },
   p5: {
     avatar: '👩‍⚕️',
@@ -79,6 +104,9 @@ const NPC_PROFILES: Record<
     bio: 'Bác sĩ trẻ công tác tại khu Giải Phóng – Bạch Mai, xuống xe ở nút giao Pháp Vân.',
     activity: 'Đang đọc sách trên xe',
     hair: '#1e1b18',
+    bodyType: 'fem',
+    hairStyle: 'ponytail',
+    accessories: [],
   },
   p6: {
     avatar: '🧑‍🎓',
@@ -86,6 +114,9 @@ const NPC_PROFILES: Record<
     bio: 'Sinh viên Đại học Thương Mại bắt xe từ Bánh mì 168 lên thẳng Bến xe Mỹ Đình.',
     activity: 'Đang nhìn ra cánh đồng lúa Hà Nam',
     hair: '#09090b',
+    bodyType: 'masc',
+    hairStyle: 'short',
+    accessories: ['glasses', 'backpack'],
   },
   p7: {
     avatar: '👩‍🏫',
@@ -93,6 +124,9 @@ const NPC_PROFILES: Record<
     bio: 'Giáo viên tiểu học về thăm quê Bình Lục cuối tuần, chuẩn bị xuống điểm 168 Khuất Duy Tiến.',
     activity: 'Đang mỉm cười thân thiện',
     hair: '#291d12',
+    bodyType: 'fem',
+    hairStyle: 'long',
+    accessories: [],
   },
   p8: {
     avatar: '👨‍🔧',
@@ -100,6 +134,9 @@ const NPC_PROFILES: Record<
     bio: 'Kỹ thuật viên cơ khí vui tính, thuộc làu từng điểm dừng trên cao tốc Pháp Vân – Cầu Giẽ.',
     activity: 'Đang ngồi thư giãn',
     hair: '#18181b',
+    bodyType: 'masc',
+    hairStyle: 'short',
+    accessories: ['cap'],
   },
   p9: {
     avatar: '👩‍🍳',
@@ -107,6 +144,9 @@ const NPC_PROFILES: Record<
     bio: 'Đầu bếp mang đặc sản cá kho Vũ Đại và bánh đa Kiện Khê lên biếu người thân ở Mỹ Đình.',
     activity: 'Đang ngắm hàng cây ven đường',
     hair: '#1c1917',
+    bodyType: 'fem',
+    hairStyle: 'bun',
+    accessories: [],
   },
   p10: {
     avatar: '🎸',
@@ -114,6 +154,69 @@ const NPC_PROFILES: Record<
     bio: 'Nhạc công Acoustic trẻ đang trên chuyến xe từ Hà Nam trở về Bến xe Mỹ Đình.',
     activity: 'Đang ngân nga giai điệu',
     hair: '#0f172a',
+    bodyType: 'masc',
+    hairStyle: 'sidePart',
+    accessories: ['backpack'],
+  },
+  p11: {
+    avatar: '👵',
+    hometown: 'Vũ Bản, Bình Lục',
+    bio: 'Bà Tư mang gà quê và rau vườn lên thăm con gái ở Thanh Xuân, đi chuyến này đã thành quen.',
+    activity: 'Đang ôm làn quà quê',
+    hair: '#9ca3af',
+    bodyType: 'fem',
+    hairStyle: 'bun',
+    accessories: [],
+  },
+  p12: {
+    avatar: '🧑‍💻',
+    hometown: 'Phủ Lý, Hà Nam',
+    bio: 'Lập trình viên làm ở Cầu Giấy, tranh thủ ngủ bù trên xe sau cuối tuần về quê.',
+    activity: 'Đang lướt điện thoại',
+    hair: '#18181b',
+    bodyType: 'masc',
+    hairStyle: 'short',
+    accessories: ['glasses'],
+  },
+  p13: {
+    avatar: '👩‍🎓',
+    hometown: 'Tràng An, Bình Lục',
+    bio: 'Sinh viên năm hai Học viện Ngân hàng, hay kể chuyện ký túc xá cho cả xe nghe.',
+    activity: 'Đang ngắm đường qua cửa kính',
+    hair: '#1c1917',
+    bodyType: 'fem',
+    hairStyle: 'ponytail',
+    accessories: ['backpack'],
+  },
+  p14: {
+    avatar: '👨‍🏭',
+    hometown: 'Thanh Liêm, Hà Nam',
+    bio: 'Chú Sơn làm thợ xây ở Hà Nội, tuần nào cũng đi về trên chuyến xe này.',
+    activity: 'Đang chợp mắt ở hàng ghế cuối',
+    hair: '#3f3f46',
+    bodyType: 'masc',
+    hairStyle: 'buzz',
+    accessories: ['cap'],
+  },
+  p15: {
+    avatar: '👩‍🌾',
+    hometown: 'Thanh Liêm, Hà Nam',
+    bio: 'Cô Liên đi cùng chồng lên Hà Nội khám bệnh định kỳ ở Bạch Mai.',
+    activity: 'Đang trò chuyện với chú Sơn',
+    hair: '#27272a',
+    bodyType: 'fem',
+    hairStyle: 'long',
+    accessories: [],
+  },
+  p16: {
+    avatar: '🎧',
+    hometown: 'Mỹ Đình, Hà Nội',
+    bio: 'Bảo Ngọc về quê ngoại chơi hè, giờ quay lại Hà Nội đi học thêm.',
+    activity: 'Đang nghe nhạc',
+    hair: '#1e1b18',
+    bodyType: 'fem',
+    hairStyle: 'sidePart',
+    accessories: ['glasses'],
   },
 };
 
@@ -125,14 +228,15 @@ function createInitialCharacters(): {
   const characters: Record<string, CharacterData> = {};
   const characterOrder: string[] = [];
 
-  // 1. Main Controllable Player Character (starts standing in the central aisle)
+  // 1. Main controllable player: waits on the kerb of the first stop, facing the bus
+  const [spawnX, spawnZ] = STATION_LAYOUTS.townStop.spawn;
   const player: CharacterData = {
     id: 'player',
     name: 'Bạn (Khách hành trình)',
     avatar: '🧑‍🚀',
     modelUrl: null,
-    position: [0, floorY, 1.35],
-    rotationY: 0,
+    position: [spawnX, PLATFORM_Y, spawnZ],
+    rotationY: Math.PI / 2,
     state: 'idle',
     currentAnimation: 'Idle',
     activeEmote: null,
@@ -143,9 +247,12 @@ function createInitialCharacters(): {
     shirtColor: '#f59e0b',
     pantsColor: '#1e293b',
     hairColor: '#18181b',
+    bodyType: 'masc',
+    hairStyle: 'sidePart',
+    accessories: ['backpack'],
     hometown: 'Bình Lục, Hà Nam',
     bio: 'Hành khách khởi hành từ điểm hẹn Bánh mì 168 Bình Lục lên Bến xe Mỹ Đình.',
-    activityLabel: 'Đang đứng ở lối đi giữa',
+    activityLabel: 'Đang chờ xe ở điểm đón',
   };
 
   characters[player.id] = player;
@@ -188,6 +295,9 @@ function createInitialCharacters(): {
       shirtColor: p.shirtColor,
       pantsColor: '#1e293b',
       hairColor: profile.hair,
+      bodyType: profile.bodyType,
+      hairStyle: profile.hairStyle,
+      accessories: profile.accessories,
       hometown: profile.hometown,
       bio: profile.bio,
       activityLabel: profile.activity,
@@ -338,8 +448,16 @@ export const useCharacterStore = create<CharacterStoreState>((set, get) => ({
       }
     }
 
-    // Waypoint 1: Align with central aisle X = 0 at current Z
-    if (Math.abs(startPos[0]) > 0.08) {
+    if (startPos[0] >= PLATFORM_EDGE_X - 0.05) {
+      // Standing outside: walk along the kerb to the door, then up the steps into the aisle
+      const kerbX = 2.3;
+      if (Math.abs(startPos[2] - DOOR_Z) > 0.3) {
+        if (startPos[0] > kerbX + 0.3) waypoints.push([kerbX, PLATFORM_Y, startPos[2]]);
+        waypoints.push([kerbX, PLATFORM_Y, DOOR_Z]);
+      }
+      waypoints.push([0, floorY, DOOR_Z]);
+    } else if (Math.abs(startPos[0]) > 0.08) {
+      // Waypoint 1: Align with central aisle X = 0 at current Z
       waypoints.push([0, floorY, startPos[2]]);
     }
 

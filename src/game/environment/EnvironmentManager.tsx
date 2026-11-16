@@ -2,8 +2,9 @@ import React from 'react';
 import { SkyAndLighting } from './SkyAndLighting';
 import { RoadSystem } from './RoadSystem';
 import { StreetLights } from './StreetLights';
-import { CountrysideScenery } from './CountrysideScenery';
-import { StationPlatform } from './StationPlatform';
+import { RouteScenery } from './scenery/RouteScenery';
+import { RouteStation } from './station/RouteStation';
+import { TrafficSystem } from './traffic/TrafficSystem';
 import { StopArea } from './StopArea';
 import { WeatherEffects } from './WeatherEffects';
 
@@ -13,8 +14,9 @@ export const EnvironmentManager: React.FC = () => {
       <SkyAndLighting />
       <RoadSystem />
       <StreetLights />
-      <CountrysideScenery />
-      <StationPlatform />
+      <RouteScenery />
+      <TrafficSystem />
+      <RouteStation />
       <StopArea />
       <WeatherEffects />
     </group>

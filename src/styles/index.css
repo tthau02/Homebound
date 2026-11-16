@@ -11,8 +11,54 @@
     margin: 0;
     padding: 0;
     overflow: hidden;
-    background-color: #020617;
-    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    background-color: #0b0f16;
+    font-family: 'Be Vietnam Pro', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  :focus-visible {
+    outline: 2px solid #f5a524;
+    outline-offset: 2px;
   }
 }
 
+@layer components {
+  /* Solid, slightly translucent HUD surface (Phase 9 design system) */
+  .hud-panel {
+    @apply rounded-hud border border-white/[0.07] bg-ink-900/[0.88] shadow-hud backdrop-blur-md text-ink-100;
+  }
+
+  .hud-kbd {
+    @apply inline-flex min-w-[1.5rem] items-center justify-center rounded-md border border-white/10 bg-ink-800 px-1.5 py-0.5 font-mono text-xs font-semibold text-ink-200;
+  }
+}
+
+/* Explicit variants insertion point so safe-area utilities layer cleanly on top of breakpoints */
+@tailwind variants;
+
+/* Defined after Tailwind variants so safe-area insets are preserved across breakpoints */
+.safe-px {
+  padding-left: max(1.25rem, env(safe-area-inset-left, 0px));
+  padding-right: max(1.25rem, env(safe-area-inset-right, 0px));
+}
+.safe-pb {
+  padding-bottom: max(1.25rem, env(safe-area-inset-bottom, 0px));
+}
+@media (min-width: 640px) {
+  .safe-px {
+    padding-left: max(2.5rem, env(safe-area-inset-left, 0px));
+    padding-right: max(2.5rem, env(safe-area-inset-right, 0px));
+  }
+  .safe-pb {
+    padding-bottom: max(2.5rem, env(safe-area-inset-bottom, 0px));
+  }
+}
+@media (max-height: 600px) {
+  .safe-px {
+    padding-left: max(1rem, env(safe-area-inset-left, 0px));
+    padding-right: max(1rem, env(safe-area-inset-right, 0px));
+  }
+  .safe-pb {
+    padding-bottom: max(1rem, env(safe-area-inset-bottom, 0px));
+  }
+}
